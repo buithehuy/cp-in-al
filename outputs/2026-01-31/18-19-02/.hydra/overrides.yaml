@@ -1,0 +1,5 @@
+- num_rounds=2
+- initial_labeled=100
+- budget_per_round=50
+- calibration_size=100
+- trainer.epochs_per_round=1

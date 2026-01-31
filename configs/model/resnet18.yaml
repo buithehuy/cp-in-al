@@ -1,0 +1,4 @@
+# ResNet18 model configuration
+name: resnet18
+num_classes: 10
+pretrained: true  # Use ImageNet pretrained weights

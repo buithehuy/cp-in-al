@@ -1,0 +1,37 @@
+data:
+  name: CIFAR10
+  root: ./data
+  num_classes: 10
+  batch_size: 128
+  mean:
+  - 0.4914
+  - 0.4822
+  - 0.4465
+  std:
+  - 0.2023
+  - 0.1994
+  - 0.201
+model:
+  name: resnet18
+  num_classes: 10
+  pretrained: true
+strategy:
+  name: entropy
+  type: uncertainty
+trainer:
+  epochs_per_round: 1
+  batch_size: 128
+  lr: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  optimizer: sgd
+  scheduler: cosine
+  device: cuda
+seed: 42
+initial_labeled: 100
+calibration_size: 100
+budget_per_round: 50
+num_rounds: 2
+cp_alpha: 0.1
+output_dir: ./outputs/${strategy.name}/${now:%Y-%m-%d_%H-%M-%S}
+save_results: true

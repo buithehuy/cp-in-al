@@ -1,0 +1,22 @@
+defaults:
+  - data: cifar10
+  - model: resnet18
+  - strategy: entropy
+  - trainer: default
+  - _self_
+
+# Random seed
+seed: 42
+
+# Active Learning setup
+initial_labeled: 5000
+calibration_size: 5000
+budget_per_round: 2000
+num_rounds: 21
+
+# Conformal Prediction
+cp_alpha: 0.1
+
+# Output
+output_dir: ./outputs/${strategy.name}/${now:%Y-%m-%d_%H-%M-%S}
+save_results: true

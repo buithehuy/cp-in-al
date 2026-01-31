@@ -1,0 +1,58 @@
+"""Acquisition strategies package."""
+from .base import AcquisitionStrategy
+from .uncertainty import (
+    RandomSampling,
+    EntropySampling,
+    LeastConfidenceSampling,
+    MarginSampling
+)
+from .conformal import (
+    CPSizeSampling,
+    CPVShapedSampling,
+    CombinedSampling,
+    CombinedVShapedSampling
+)
+
+# Strategy registry
+STRATEGIES = {
+    "random": RandomSampling,
+    "entropy": EntropySampling,
+    "least_confidence": LeastConfidenceSampling,
+    "margin": MarginSampling,
+    "cp_size": CPSizeSampling,
+    "cp_v_shaped": CPVShapedSampling,
+    "combined": CombinedSampling,
+    "combined_v_shaped": CombinedVShapedSampling,
+}
+
+
+def get_strategy(name):
+    """Get acquisition strategy by name.
+    
+    Args:
+        name: Strategy name
+        
+    Returns:
+        Instantiated strategy object
+        
+    Raises:
+        ValueError: If strategy name is not recognized
+    """
+    if name not in STRATEGIES:
+        raise ValueError(f"Unknown strategy: {name}. Available: {list(STRATEGIES.keys())}")
+    return STRATEGIES[name]()
+
+
+__all__ = [
+    'AcquisitionStrategy',
+    'RandomSampling',
+    'EntropySampling',
+    'LeastConfidenceSampling',
+    'MarginSampling',
+    'CPSizeSampling',
+    'CPVShapedSampling',
+    'CombinedSampling',
+    'CombinedVShapedSampling',
+    'STRATEGIES',
+    'get_strategy',
+]
