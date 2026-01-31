@@ -1,0 +1,9 @@
+# CIFAR-100 dataset configuration
+name: CIFAR100
+root: ./data
+num_classes: 100
+batch_size: 128
+
+# Normalization statistics
+mean: [0.5071, 0.4867, 0.4408]
+std: [0.2675, 0.2565, 0.2761]
