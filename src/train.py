@@ -73,10 +73,17 @@ def main(cfg: DictConfig):
     
     # Initialize model
     print(f"\nInitializing {cfg.model.name} model...")
+    
+    # Use num_classes from data config (source of truth)
+    # Override model.num_classes if specified, otherwise use data.num_classes
+    num_classes = cfg.model.get('num_classes', cfg.data.num_classes)
+    
     model = ResNet18(
-        num_classes=cfg.model.num_classes,
+        num_classes=num_classes,
         pretrained=cfg.model.pretrained
     )
+    print(f"Model configured for {num_classes} classes")
+
     
     # Initialize acquisition strategy
     print(f"Initializing {cfg.strategy.name} strategy...")
