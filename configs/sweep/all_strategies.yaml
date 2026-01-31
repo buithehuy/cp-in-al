@@ -1,0 +1,8 @@
+# Hydra sweep configuration for all strategies
+defaults:
+  - override hydra/sweeper: basic
+
+hydra:
+  sweeper:
+    params:
+      strategy: random,entropy,least_confidence,margin,cp_size,cp_v_shaped,combined,combined_v_shaped

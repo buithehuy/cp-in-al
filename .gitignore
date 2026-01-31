@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# PyTorch
+*.pt
+*.pth
+*.ckpt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data
+data/
+datasets/
+*.tar.gz
+*.zip
+
+# Outputs & Logs
+outputs/
+logs/
+runs/
+wandb/
+*.log
+
+# Hydra
+.hydra/
+multirun/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Model checkpoints (keep only best)
+checkpoints/*
+!checkpoints/.gitkeep
+
+# Results (optional - uncomment to not track)
+# results/
+# *.pkl
+# *.csv
+
+# Cache
+.cache/
+.pytest_cache/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Documentation (personal notes - not tracked)
+NOTES.md
+DEVELOPER_GUIDE.md

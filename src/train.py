@@ -8,6 +8,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from data import CIFAR10DataModule
+from data import CIFAR100DataModule
 from models import ResNet18
 from strategies import get_strategy
 from utils import (
@@ -50,7 +51,13 @@ def main(cfg: DictConfig):
     
     # Initialize data module
     print("\nInitializing data...")
-    data_module = CIFAR10DataModule(cfg.data)
+
+    if cfg.data.name == "CIFAR10":
+        data_module = CIFAR10DataModule(cfg.data)
+    elif cfg.data.name == "CIFAR100":
+        data_module = CIFAR100DataModule(cfg.data)
+    else:
+        raise ValueError(f"Unknown dataset: {cfg.data.name}")
     
     # Setup active learning splits
     labeled_idx, calib_idx, pool_idx = data_module.setup_active_learning(

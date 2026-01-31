@@ -27,7 +27,6 @@ python src/train.py
 
 ### Change Acquisition Strategy
 
-
 ```bash
 # Random baseline
 python src/train.py strategy=random
@@ -45,6 +44,29 @@ python src/train.py strategy=cp_v_shaped
 python src/train.py strategy=combined
 python src/train.py strategy=combined_v_shaped
 ```
+
+### Run Multiple Strategies
+
+Use `run_all_strategies.py` to run multiple strategies automatically:
+
+```bash
+# Run specific strategies (recommended for comparison)
+python run_all_strategies.py -s entropy combined cp_v_shaped
+
+# Run all 8 strategies
+python run_all_strategies.py --all
+
+# Quick test with specific strategies (2 rounds, small data)
+python run_all_strategies.py -s entropy cp_v_shaped --quick
+
+# Custom number of rounds
+python run_all_strategies.py -s entropy combined --num_rounds 10
+
+# See all options
+python run_all_strategies.py --help
+```
+
+**Note**: Strategies run sequentially. For 8 strategies × 21 rounds, expect ~2-4 hours on GPU.
 
 ### Quick Test
 
@@ -118,3 +140,10 @@ If you use this code, please cite:
   year={2026}
 }
 ```
+
+## Documentation
+
+- **[README.md](README.md)** - Quick start guide
+- **[NOTES.md](NOTES.md)** - Usage tips and troubleshooting (Vietnamese)
+- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Extending the project (datasets, strategies, CP methods)
+
