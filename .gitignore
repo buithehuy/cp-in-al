@@ -37,9 +37,9 @@ env/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Data
-data/
-datasets/
+# Data (only root data directory, not src/data/)
+/data/
+/datasets/
 *.tar.gz
 *.zip
 

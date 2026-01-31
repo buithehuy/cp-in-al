@@ -71,18 +71,20 @@ def main(cfg: DictConfig):
     print(f"Pool: {len(pool_idx)}")
     print(f"Total available: {len(labeled_idx) + len(pool_idx)}")
     
+    
     # Initialize model
     print(f"\nInitializing {cfg.model.name} model...")
     
-    # Use num_classes from data config (source of truth)
-    # Override model.num_classes if specified, otherwise use data.num_classes
-    num_classes = cfg.model.get('num_classes', cfg.data.num_classes)
+    # Use num_classes from data config as source of truth
+    # Model config can override only if explicitly specified via command line
+    num_classes = cfg.data.num_classes
     
     model = ResNet18(
         num_classes=num_classes,
         pretrained=cfg.model.pretrained
     )
-    print(f"Model configured for {num_classes} classes")
+    print(f"Model configured for {num_classes} classes ({cfg.data.name})")
+
 
     
     # Initialize acquisition strategy
