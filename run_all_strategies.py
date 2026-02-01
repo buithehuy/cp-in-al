@@ -126,6 +126,18 @@ Examples:
   # Quick test with specific strategies
   python run_all_strategies.py -s entropy cp_v_shaped --quick
   
+  # Run with CIFAR-100
+  python run_all_strategies.py --all data=cifar100
+  
+  # Run specific strategies with CIFAR-100
+  python run_all_strategies.py -s entropy combined data=cifar100
+  
+  # Quick test with CIFAR-100
+  python run_all_strategies.py -s entropy --quick data=cifar100
+  
+  # Custom overrides
+  python run_all_strategies.py --all data=cifar100 trainer.lr=0.001
+  
   # Run without auto-plotting
   python run_all_strategies.py --all --no-plot
   
@@ -163,6 +175,11 @@ Examples:
         action="store_true",
         help="Disable automatic plot generation"
     )
+    parser.add_argument(
+        "overrides",
+        nargs="*",
+        help="Additional Hydra overrides (e.g., data=cifar100 trainer.lr=0.001)"
+    )
     
     args = parser.parse_args()
     
@@ -176,6 +193,16 @@ Examples:
     
     print(f"Running strategies: {', '.join(strategies_to_run)}")
     
+    # Parse additional overrides into kwargs
+    extra_kwargs = {}
+    for override in args.overrides:
+        if '=' in override:
+            key, value = override.split('=', 1)
+            extra_kwargs[key] = value
+    
+    if extra_kwargs:
+        print(f"Additional overrides: {extra_kwargs}")
+    
     if args.quick:
         # Quick test: 2 rounds, small data
         run_strategies(
@@ -185,12 +212,14 @@ Examples:
             initial_labeled=100,
             budget_per_round=50,
             calibration_size=100,
-            **{"trainer.epochs_per_round": 1}
+            **{"trainer.epochs_per_round": 1},
+            **extra_kwargs
         )
     else:
         # Full experiment
         run_strategies(
             strategies_to_run, 
             num_rounds=args.num_rounds,
-            plot_results=not args.no_plot
+            plot_results=not args.no_plot,
+            **extra_kwargs
         )
