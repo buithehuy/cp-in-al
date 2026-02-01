@@ -31,18 +31,26 @@ LABELS = {
 
 
 def compute_aulc(labeled_sizes, accuracies):
-    """Compute Area Under Learning Curve (AULC).
+    """Compute normalized Area Under Learning Curve (AULC).
     
-    Uses trapezoidal rule to compute the area under the accuracy curve.
+    Uses trapezoidal rule to compute the area, then normalizes by 
+    the total number of samples to get an average accuracy metric.
     
     Args:
         labeled_sizes: List of number of labeled samples
         accuracies: List of accuracies at each size
         
     Returns:
-        AULC value
+        Normalized AULC (essentially average accuracy across the learning curve)
     """
-    return np.trapz(accuracies, labeled_sizes)
+    # Compute raw area using trapezoid (newer NumPy API)
+    raw_aulc = np.trapezoid(accuracies, labeled_sizes)
+    
+    # Normalize by total samples to get interpretable metric (avg accuracy)
+    max_samples = max(labeled_sizes) if len(labeled_sizes) > 0 else 1
+    normalized_aulc = raw_aulc / max_samples
+    
+    return normalized_aulc
 
 
 def compute_accuracy_gap(results_dict, baseline='random'):
@@ -300,13 +308,13 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
         colors.append(COLORS.get(strategy_name, '#808080'))
     
     bars = ax.barh(strategy_names, aulc_values, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-    ax.set_xlabel('AULC (Area Under Learning Curve)', fontsize=13)
+    ax.set_xlabel('AULC (Normalized - Avg Accuracy %)', fontsize=13)
     ax.set_title('AULC Comparison', fontsize=14, fontweight='bold')
     ax.grid(True, alpha=0.3, axis='x')
     
-    # Add value labels on bars
+    # Add value labels on bars (show as percentage)
     for i, (bar, val) in enumerate(zip(bars, aulc_values)):
-        ax.text(val, i, f'  {val:.0f}', va='center', fontsize=10, fontweight='bold')
+        ax.text(val, i, f'  {val:.2f}%', va='center', fontsize=10, fontweight='bold')
     
     plt.tight_layout()
     
@@ -431,11 +439,11 @@ def print_summary_table(results_dict, show_cp_metrics=False):
         results_dict: Dictionary mapping strategy names to results
         show_cp_metrics: Whether to show CP metrics (default: False)
     """
-    print("\n" + "="*70)
+    print("\n" + "="*75)
     print("ACTIVE LEARNING RESULTS")
-    print("="*70)
-    print(f"{'Strategy':<20} {'Final Acc':<12} {'AULC':<15}")
-    print("-"*70)
+    print("="*75)
+    print(f"{'Strategy':<20} {'Final Acc':<12} {'AULC (Norm)':<15}")
+    print("-"*75)
     
     for strategy_name in sorted(results_dict.keys()):
         results = results_dict[strategy_name]
@@ -443,9 +451,9 @@ def print_summary_table(results_dict, show_cp_metrics=False):
         aulc = compute_aulc(results['labeled_sizes'], results['accuracies'])
         
         label = LABELS.get(strategy_name, strategy_name)
-        print(f"{label:<20} {final_acc:>10.2f}%  {aulc:>13.0f}")
+        print(f"{label:<20} {final_acc:>10.2f}%  {aulc:>13.2f}%")
     
-    print("="*70)
+    print("="*75)
     
     # Print accuracy gaps vs random if available
     if 'random' in results_dict:
