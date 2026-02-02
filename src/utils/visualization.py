@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 import os
 import numpy as np
+import pandas as pd
 
 
 # Colors for each strategy (matching notebook)
@@ -90,6 +91,7 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6)):
     """
     plt.figure(figsize=figsize)
     
+    all_accuracies = []
     for strategy_name, results in results_dict.items():
         plt.plot(
             results['labeled_sizes'],
@@ -97,9 +99,17 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6)):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
+        all_accuracies.extend(results['accuracies'])
+    
+    # Smart y-axis scaling
+    if all_accuracies:
+        min_acc = min(all_accuracies)
+        max_acc = max(all_accuracies)
+        padding = (max_acc - min_acc) * 0.05
+        plt.ylim(min_acc - padding, max_acc + padding)
     
     plt.xlabel('Samples Trained', fontsize=12)
     plt.ylabel('Test Accuracy (%)', fontsize=12)
@@ -142,8 +152,8 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
     
     plt.axhline(y=0, color='red', linestyle='--', linewidth=1.5, 
@@ -181,8 +191,8 @@ def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
     
     # Target coverage line
@@ -220,8 +230,8 @@ def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6)):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
     
     plt.xlabel('Samples Trained', fontsize=12)
@@ -250,6 +260,7 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
     
     # 1. Accuracy vs Samples
     ax = axes[0]
+    all_accuracies = []
     for strategy_name, results in results_dict.items():
         ax.plot(
             results['labeled_sizes'],
@@ -257,9 +268,18 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2.5
+            markersize=3,
+            linewidth=1.5  # Thinner lines
         )
+        all_accuracies.extend(results['accuracies'])
+    
+    # Smart y-axis scaling with 5% padding
+    if all_accuracies:
+        min_acc = min(all_accuracies)
+        max_acc = max(all_accuracies)
+        padding = (max_acc - min_acc) * 0.05
+        ax.set_ylim(min_acc - padding, max_acc + padding)
+    
     ax.set_xlabel('Samples Trained', fontsize=13)
     ax.set_ylabel('Test Accuracy (%)', fontsize=13)
     ax.set_title('Accuracy vs Training Samples', fontsize=14, fontweight='bold')
@@ -280,8 +300,8 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
                 label=LABELS.get(strategy_name, strategy_name),
                 color=COLORS.get(strategy_name, None),
                 marker='o',
-                markersize=4,
-                linewidth=2.5
+                markersize=3,
+                linewidth=1.5  # Thinner lines
             )
         ax.axhline(y=0, color='red', linestyle='--', linewidth=2, label='Random (Baseline)')
     ax.set_xlabel('Samples Trained', fontsize=13)
@@ -349,8 +369,8 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
     ax.axhline(y=0.9, color='red', linestyle='--', linewidth=2, label='Target (90%)')
     ax.set_xlabel('Samples Trained', fontsize=13)
@@ -368,8 +388,8 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
     ax.set_xlabel('Samples Trained', fontsize=13)
     ax.set_ylabel('Avg Set Size', fontsize=13)
@@ -386,8 +406,8 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=4,
-            linewidth=2
+            markersize=3,
+            linewidth=1.5
         )
     ax.set_xlabel('Samples Trained', fontsize=13)
     ax.set_ylabel('Number of Zero Sets', fontsize=13)
@@ -430,6 +450,44 @@ def load_results(results_dir):
             print(f"Loaded results for: {strategy_name}")
     
     return results_dict
+
+
+def export_accuracy_table(results_dict, output_path='accuracy_table.csv'):
+    """Export accuracy vs samples table to CSV.
+    
+    Args:
+        results_dict: Dictionary mapping strategy names to results
+        output_path: Path to save CSV file (default: 'accuracy_table.csv')
+        
+    Returns:
+        DataFrame with accuracy table
+    """
+    # Find all unique sample sizes
+    all_samples = set()
+    for results in results_dict.values():
+        all_samples.update(results['labeled_sizes'])
+    
+    sample_sizes = sorted(all_samples)
+    
+    # Create DataFrame
+    data = {'Samples': sample_sizes}
+    
+    for strategy_name in sorted(results_dict.keys()):
+        results = results_dict[strategy_name]
+        label = LABELS.get(strategy_name, strategy_name)
+        
+        # Map accuracies to sample sizes
+        accuracy_map = dict(zip(results['labeled_sizes'], results['accuracies']))
+        data[label] = [accuracy_map.get(s, None) for s in sample_sizes]
+    
+    df = pd.DataFrame(data)
+    
+    # Save to CSV
+    df.to_csv(output_path, index=False, float_format='%.2f')
+    print(f"\n📊 Exported accuracy table to: {output_path}")
+    print(f"   Rows: {len(df)}, Columns: {len(df.columns)}")
+    
+    return df
 
 
 def print_summary_table(results_dict, show_cp_metrics=False):

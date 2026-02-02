@@ -12,7 +12,8 @@ from utils.visualization import (
     plot_cp_coverage,
     plot_cp_set_size,
     plot_all_metrics,
-    print_summary_table
+    print_summary_table,
+    export_accuracy_table
 )
 
 
@@ -33,6 +34,9 @@ Examples:
   
   # Print summary table only
   python plot_results.py outputs/ --table-only
+  
+  # Export accuracy table to CSV
+  python plot_results.py outputs/ --export-csv accuracy_results.csv
         """
     )
     
@@ -60,6 +64,10 @@ Examples:
         action='store_true',
         help='Only print summary table, no plots'
     )
+    parser.add_argument(
+        '--export-csv',
+        help='Export accuracy table to CSV file (e.g., --export-csv results.csv)'
+    )
     
     args = parser.parse_args()
     
@@ -75,6 +83,10 @@ Examples:
     
     # Print summary table
     print_summary_table(results_dict)
+    
+    # Export CSV if requested
+    if args.export_csv:
+        export_accuracy_table(results_dict, args.export_csv)
     
     if args.table_only:
         return
