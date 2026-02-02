@@ -31,51 +31,6 @@ LABELS = {
 }
 
 
-def _calculate_plot_params(results_dict, base_width=14, base_height=6):
-    """Calculate intelligent plot parameters based on data.
-    
-    Args:
-        results_dict: Dictionary mapping strategy names to results
-        base_width: Base figure width
-        base_height: Base figure height
-        
-    Returns:
-        Dictionary with 'figsize', 'markersize', 'linewidth'
-    """
-    # Get data characteristics
-    num_strategies = len(results_dict)
-    max_points = max([len(r['labeled_sizes']) for r in results_dict.values()], default=5)
-    
-    # Calculate adaptive figure size
-    # Scale width based on number of data points (more points = wider plot)
-    width_scale = 1.0 + (max_points - 5) * 0.05  # +5% per additional point beyond 5
-    width = base_width * max(1.0, min(width_scale, 2.0))  # Cap at 2x
-    
-    # Keep height relatively stable but increase slightly for many strategies
-    height_scale = 1.0 + (num_strategies - 4) * 0.03  # +3% per strategy beyond 4
-    height = base_height * max(1.0, min(height_scale, 1.3))  # Cap at 1.3x
-    
-    # Calculate adaptive marker size
-    # Fewer points = larger markers, more points = smaller markers
-    if max_points <= 5:
-        markersize = 6
-    elif max_points <= 8:
-        markersize = 5
-    elif max_points <= 12:
-        markersize = 4
-    else:
-        markersize = 3
-    
-    # Line width: thinner for many strategies
-    linewidth = 2.0 if num_strategies <= 4 else 1.5
-    
-    return {
-        'figsize': (width, height),
-        'markersize': markersize,
-        'linewidth': linewidth
-    }
-
-
 def compute_aulc(labeled_sizes, accuracies):
     """Compute normalized Area Under Learning Curve (AULC).
     
@@ -126,21 +81,14 @@ def compute_accuracy_gap(results_dict, baseline='random'):
     return gaps
 
 
-def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=None):
+def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6)):
     """Plot accuracy vs number of labeled samples for all strategies.
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         save_path: Optional path to save the figure
-        figsize: Optional figure size (width, height). If None, calculated automatically
+        figsize: Figure size (width, height)
     """
-    # Get intelligent plot parameters
-    params = _calculate_plot_params(results_dict)
-    
-    # Use provided figsize or calculated one
-    if figsize is None:
-        figsize = params['figsize']
-    
     plt.figure(figsize=figsize)
     
     all_accuracies = []
@@ -151,18 +99,16 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=None):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
         all_accuracies.extend(results['accuracies'])
     
-    # Smart y-axis scaling with adaptive padding
+    # Smart y-axis scaling
     if all_accuracies:
         min_acc = min(all_accuracies)
         max_acc = max(all_accuracies)
-        # Use larger padding for small ranges, smaller for large ranges
-        acc_range = max_acc - min_acc
-        padding = max(acc_range * 0.1, 0.5)  # At least 0.5% padding
+        padding = (max_acc - min_acc) * 0.05
         plt.ylim(min_acc - padding, max_acc + padding)
     
     plt.xlabel('Samples Trained', fontsize=12)
@@ -179,25 +125,19 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=None):
     plt.show()
     
 
-def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=None):
+def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(14, 6)):
     """Plot accuracy gap compared to baseline strategy.
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         baseline: Baseline strategy name (default: 'random')
         save_path: Optional path to save the figure
-        figsize: Optional figure size (width, height). If None, calculated automatically
+        figsize: Figure size (width, height)
     """
     gaps = compute_accuracy_gap(results_dict, baseline)
     
     if not gaps:
         return
-    
-    # Get intelligent plot parameters
-    params = _calculate_plot_params(results_dict)
-    
-    if figsize is None:
-        figsize = params['figsize']
     
     plt.figure(figsize=figsize)
     
@@ -212,8 +152,8 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=N
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
     
     plt.axhline(y=0, color='red', linestyle='--', linewidth=1.5, 
@@ -233,21 +173,15 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=N
     plt.show()
 
 
-def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=None):
+def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=(14, 6)):
     """Plot conformal prediction coverage over rounds.
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         target_coverage: Target coverage level (default: 0.9 for alpha=0.1)
         save_path: Optional path to save the figure
-        figsize: Optional figure size (width, height). If None, calculated automatically
+        figsize: Figure size (width, height)
     """
-    # Get intelligent plot parameters
-    params = _calculate_plot_params(results_dict)
-    
-    if figsize is None:
-        figsize = params['figsize']
-    
     plt.figure(figsize=figsize)
     
     for strategy_name, results in results_dict.items():
@@ -257,8 +191,8 @@ def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
     
     # Target coverage line
@@ -279,20 +213,14 @@ def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=
     plt.show()
 
 
-def plot_cp_set_size(results_dict, save_path=None, figsize=None):
+def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6)):
     """Plot average conformal prediction set size.
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         save_path: Optional path to save the figure
-        figsize: Optional figure size (width, height). If None, calculated automatically
+        figsize: Figure size (width, height)
     """
-    # Get intelligent plot parameters
-    params = _calculate_plot_params(results_dict)
-    
-    if figsize is None:
-        figsize = params['figsize']
-    
     plt.figure(figsize=figsize)
     
     for strategy_name, results in results_dict.items():
@@ -302,8 +230,8 @@ def plot_cp_set_size(results_dict, save_path=None, figsize=None):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
     
     plt.xlabel('Samples Trained', fontsize=12)
@@ -328,10 +256,7 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
         output_dir: Optional directory to save plots
         show: Whether to display plots
     """
-    # Get intelligent plot parameters
-    params = _calculate_plot_params(results_dict, base_width=20, base_height=6)
-    
-    fig, axes = plt.subplots(1, 3, figsize=params['figsize'])
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     
     # 1. Accuracy vs Samples
     ax = axes[0]
@@ -343,17 +268,16 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5  # Thinner lines
         )
         all_accuracies.extend(results['accuracies'])
     
-    # Smart y-axis scaling with adaptive padding
+    # Smart y-axis scaling with 5% padding
     if all_accuracies:
         min_acc = min(all_accuracies)
         max_acc = max(all_accuracies)
-        acc_range = max_acc - min_acc
-        padding = max(acc_range * 0.1, 0.5)  # At least 0.5% padding
+        padding = (max_acc - min_acc) * 0.05
         ax.set_ylim(min_acc - padding, max_acc + padding)
     
     ax.set_xlabel('Samples Trained', fontsize=13)
@@ -376,8 +300,8 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
                 label=LABELS.get(strategy_name, strategy_name),
                 color=COLORS.get(strategy_name, None),
                 marker='o',
-                markersize=params['markersize'],
-                linewidth=params['linewidth']
+                markersize=3,
+                linewidth=1.5  # Thinner lines
             )
         ax.axhline(y=0, color='red', linestyle='--', linewidth=2, label='Random (Baseline)')
     ax.set_xlabel('Samples Trained', fontsize=13)
@@ -434,10 +358,7 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
         output_dir: Optional directory to save plots
         show: Whether to display plots
     """
-    # Get intelligent plot parameters
-    params = _calculate_plot_params(results_dict, base_width=20, base_height=6)
-    
-    fig, axes = plt.subplots(1, 3, figsize=params['figsize'])
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     
     # 1. CP Coverage
     ax = axes[0]
@@ -448,8 +369,8 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
     ax.axhline(y=0.9, color='red', linestyle='--', linewidth=2, label='Target (90%)')
     ax.set_xlabel('Samples Trained', fontsize=13)
@@ -467,8 +388,8 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
     ax.set_xlabel('Samples Trained', fontsize=13)
     ax.set_ylabel('Avg Set Size', fontsize=13)
@@ -485,8 +406,8 @@ def plot_cp_metrics(results_dict, output_dir=None, show=True):
             label=LABELS.get(strategy_name, strategy_name),
             color=COLORS.get(strategy_name, None),
             marker='o',
-            markersize=params['markersize'],
-            linewidth=params['linewidth']
+            markersize=3,
+            linewidth=1.5
         )
     ax.set_xlabel('Samples Trained', fontsize=13)
     ax.set_ylabel('Number of Zero Sets', fontsize=13)
