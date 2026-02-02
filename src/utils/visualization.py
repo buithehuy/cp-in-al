@@ -81,7 +81,7 @@ def compute_accuracy_gap(results_dict, baseline='random'):
     return gaps
 
 
-def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), dataset=None):
+def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), dataset=None, ylim=None):
     """Plot accuracy vs number of labeled samples for all strategies.
     
     Args:
@@ -89,6 +89,7 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), data
         save_path: Optional path to save the figure
         figsize: Figure size (width, height)
         dataset: Dataset name for intelligent y-axis scaling (e.g., 'svhn')
+        ylim: Manual y-axis limits as tuple (min, max). Overrides automatic scaling.
     """
     plt.figure(figsize=figsize)
     
@@ -105,8 +106,11 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), data
         )
         all_accuracies.extend(results['accuracies'])
     
-    # Smart y-axis scaling based on dataset
-    if dataset and dataset.lower() == 'svhn':
+    # Y-axis scaling priority: manual > dataset-specific > auto-scale
+    if ylim:
+        # Manual override
+        plt.ylim(ylim[0], ylim[1])
+    elif dataset and dataset.lower() == 'svhn':
         # For SVHN, show 80-100% range for better visibility
         plt.ylim(80, 100)
     elif all_accuracies:
@@ -253,7 +257,7 @@ def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6)):
     plt.show()
 
 
-def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None):
+def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, ylim=None):
     """Plot main Active Learning metrics (Accuracy, Gap, AULC).
     
     Args:
@@ -261,6 +265,7 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None):
         output_dir: Optional directory to save plots
         show: Whether to display plots
         dataset: Dataset name for intelligent y-axis scaling (e.g., 'svhn')
+        ylim: Manual y-axis limits as tuple (min, max). Overrides automatic scaling.
     """
     fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     
@@ -279,8 +284,11 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None):
         )
         all_accuracies.extend(results['accuracies'])
     
-    # Smart y-axis scaling based on dataset
-    if dataset and dataset.lower() == 'svhn':
+    # Y-axis scaling priority: manual > dataset-specific > auto-scale
+    if ylim:
+        # Manual override
+        ax.set_ylim(ylim[0], ylim[1])
+    elif dataset and dataset.lower() == 'svhn':
         # For SVHN, show 80-100% range for better visibility
         ax.set_ylim(80, 100)
     elif all_accuracies:

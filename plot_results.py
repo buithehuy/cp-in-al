@@ -68,6 +68,13 @@ Examples:
         '--export-csv',
         help='Export accuracy table to CSV file (e.g., --export-csv results.csv)'
     )
+    parser.add_argument(
+        '--ylim',
+        nargs=2,
+        type=float,
+        metavar=('MIN', 'MAX'),
+        help='Y-axis limits for accuracy plot (e.g., --ylim 80 100)'
+    )
     
     args = parser.parse_args()
     
@@ -104,12 +111,14 @@ Examples:
     
     if args.plot == 'all':
         print("\nGenerating comprehensive plots...")
-        plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset)
+        ylim = tuple(args.ylim) if args.ylim else None
+        plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset, ylim=ylim)
         
     elif args.plot == 'accuracy':
         print("\nGenerating accuracy plot...")
         save_path = os.path.join(args.save_dir, 'accuracy.png') if args.save_dir else None
-        plot_accuracy_vs_samples(results_dict, save_path=save_path, dataset=dataset)
+        ylim = tuple(args.ylim) if args.ylim else None
+        plot_accuracy_vs_samples(results_dict, save_path=save_path, dataset=dataset, ylim=ylim)
         
     elif args.plot == 'coverage':
         print("\nGenerating coverage plot...")
