@@ -81,13 +81,14 @@ def compute_accuracy_gap(results_dict, baseline='random'):
     return gaps
 
 
-def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6)):
+def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), dataset=None):
     """Plot accuracy vs number of labeled samples for all strategies.
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         save_path: Optional path to save the figure
         figsize: Figure size (width, height)
+        dataset: Dataset name for intelligent y-axis scaling (e.g., 'svhn')
     """
     plt.figure(figsize=figsize)
     
@@ -104,8 +105,12 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6)):
         )
         all_accuracies.extend(results['accuracies'])
     
-    # Smart y-axis scaling
-    if all_accuracies:
+    # Smart y-axis scaling based on dataset
+    if dataset and dataset.lower() == 'svhn':
+        # For SVHN, show 80-100% range for better visibility
+        plt.ylim(80, 100)
+    elif all_accuracies:
+        # Auto-scale with padding for other datasets
         min_acc = min(all_accuracies)
         max_acc = max(all_accuracies)
         padding = (max_acc - min_acc) * 0.05
@@ -248,13 +253,14 @@ def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6)):
     plt.show()
 
 
-def plot_all_metrics(results_dict, output_dir=None, show=True):
+def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None):
     """Plot main Active Learning metrics (Accuracy, Gap, AULC).
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         output_dir: Optional directory to save plots
         show: Whether to display plots
+        dataset: Dataset name for intelligent y-axis scaling (e.g., 'svhn')
     """
     fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     
@@ -273,8 +279,12 @@ def plot_all_metrics(results_dict, output_dir=None, show=True):
         )
         all_accuracies.extend(results['accuracies'])
     
-    # Smart y-axis scaling with 5% padding
-    if all_accuracies:
+    # Smart y-axis scaling based on dataset
+    if dataset and dataset.lower() == 'svhn':
+        # For SVHN, show 80-100% range for better visibility
+        ax.set_ylim(80, 100)
+    elif all_accuracies:
+        # Auto-scale with padding for other datasets
         min_acc = min(all_accuracies)
         max_acc = max(all_accuracies)
         padding = (max_acc - min_acc) * 0.05

@@ -84,6 +84,14 @@ Examples:
     # Print summary table
     print_summary_table(results_dict)
     
+    # Detect dataset from results directory path
+    dataset = None
+    for ds_name in ['svhn', 'cifar10', 'cifar100', 'stl10']:
+        if ds_name in args.results_dir.lower():
+            dataset = ds_name
+            print(f"Detected dataset: {dataset}")
+            break
+    
     # Export CSV if requested
     if args.export_csv:
         export_accuracy_table(results_dict, args.export_csv)
@@ -96,12 +104,12 @@ Examples:
     
     if args.plot == 'all':
         print("\nGenerating comprehensive plots...")
-        plot_all_metrics(results_dict, output_dir=args.save_dir, show=show)
+        plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset)
         
     elif args.plot == 'accuracy':
         print("\nGenerating accuracy plot...")
         save_path = os.path.join(args.save_dir, 'accuracy.png') if args.save_dir else None
-        plot_accuracy_vs_samples(results_dict, save_path=save_path)
+        plot_accuracy_vs_samples(results_dict, save_path=save_path, dataset=dataset)
         
     elif args.plot == 'coverage':
         print("\nGenerating coverage plot...")
