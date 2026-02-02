@@ -2,21 +2,21 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 import numpy as np
 
-class CIFAR100DataModule:
-    """Data module for CIFAR-100 with Active Learning setup."""
+class STL10DataModule:
+    """Data module for STL-10 with Active Learning setup."""
     
     def __init__(self, cfg):
         self.cfg = cfg
         self.root = cfg.root
         self.batch_size = cfg.get('batch_size', 128)
         
-        # CIFAR-100 specific normalization
-        self.mean = cfg.get('mean', [0.5071, 0.4867, 0.4408])
-        self.std = cfg.get('std', [0.2675, 0.2565, 0.2761])
+        # STL-10 specific normalization
+        self.mean = cfg.get('mean', [0.4467, 0.4398, 0.4066])
+        self.std = cfg.get('std', [0.2603, 0.2566, 0.2713])
         
-        # Transforms
+        # Transforms - STL-10 images are 96x96
         self.transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(96, padding=12),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(self.mean, self.std)
@@ -27,16 +27,16 @@ class CIFAR100DataModule:
             transforms.Normalize(self.mean, self.std)
         ])
         
-        # Load CIFAR-100
-        self.train_set = datasets.CIFAR100(
+        # Load STL-10 (using train split for active learning)
+        self.train_set = datasets.STL10(
             root=self.root, 
-            train=True, 
+            split='train',
             download=True, 
             transform=self.transform_train
         )
-        self.test_set = datasets.CIFAR100(
+        self.test_set = datasets.STL10(
             root=self.root, 
-            train=False, 
+            split='test',
             download=True, 
             transform=self.transform_test
         )
@@ -74,9 +74,9 @@ class CIFAR100DataModule:
         """
         if transform is not None:
             # Create dataset copy with new transform
-            dataset = datasets.CIFAR100(
+            dataset = datasets.STL10(
                 root=self.root, 
-                train=True, 
+                split='train',
                 download=False, 
                 transform=transform
             )

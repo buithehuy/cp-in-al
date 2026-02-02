@@ -7,3 +7,9 @@ batch_size: 128
 # Normalization statistics
 mean: [0.5071, 0.4867, 0.4408]
 std: [0.2675, 0.2565, 0.2761]
+
+# Active Learning parameters (Train size: 50,000)
+# 10% calibration, 10% initial labeled, 80% pool / 20 rounds
+initial_labeled: 5000      # 10% of 50,000
+calibration_size: 5000     # 10% of 50,000
+budget_per_round: 2000     # 40,000 / 20 rounds

@@ -9,6 +9,8 @@ from omegaconf import DictConfig, OmegaConf
 
 from data import CIFAR10DataModule
 from data import CIFAR100DataModule
+from data import STL10DataModule
+from data import SVHNDataModule
 from models import ResNet18
 from strategies import get_strategy
 from utils import (
@@ -56,6 +58,10 @@ def main(cfg: DictConfig):
         data_module = CIFAR10DataModule(cfg.data)
     elif cfg.data.name == "CIFAR100":
         data_module = CIFAR100DataModule(cfg.data)
+    elif cfg.data.name == "STL10":
+        data_module = STL10DataModule(cfg.data)
+    elif cfg.data.name == "SVHN":
+        data_module = SVHNDataModule(cfg.data)
     else:
         raise ValueError(f"Unknown dataset: {cfg.data.name}")
     

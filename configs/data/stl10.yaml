@@ -1,0 +1,15 @@
+# STL-10 dataset configuration
+name: STL10
+root: ./data
+num_classes: 10
+batch_size: 128
+
+# Normalization statistics
+mean: [0.4467, 0.4398, 0.4066]
+std: [0.2603, 0.2566, 0.2713]
+
+# Active Learning parameters (Train size: 5,000)
+# 10% calibration, 10% initial labeled, 80% pool / 20 rounds
+initial_labeled: 500       # 10% of 5,000
+calibration_size: 500      # 10% of 5,000
+budget_per_round: 200      # 4,000 / 20 rounds

@@ -1,0 +1,15 @@
+# SVHN dataset configuration
+name: SVHN
+root: ./data
+num_classes: 10
+batch_size: 128
+
+# Normalization statistics
+mean: [0.4377, 0.4438, 0.4728]
+std: [0.1980, 0.2010, 0.1970]
+
+# Active Learning parameters (Train size: 73,257)
+# 10% calibration, 10% initial labeled, 80% pool / 20 rounds
+initial_labeled: 7326      # 10% of 73,257
+calibration_size: 7326     # 10% of 73,257
+budget_per_round: 2930     # 58,606 / 20 rounds

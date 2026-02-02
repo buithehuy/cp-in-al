@@ -2,19 +2,19 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 import numpy as np
 
-class CIFAR100DataModule:
-    """Data module for CIFAR-100 with Active Learning setup."""
+class SVHNDataModule:
+    """Data module for SVHN with Active Learning setup."""
     
     def __init__(self, cfg):
         self.cfg = cfg
         self.root = cfg.root
         self.batch_size = cfg.get('batch_size', 128)
         
-        # CIFAR-100 specific normalization
-        self.mean = cfg.get('mean', [0.5071, 0.4867, 0.4408])
-        self.std = cfg.get('std', [0.2675, 0.2565, 0.2761])
+        # SVHN specific normalization
+        self.mean = cfg.get('mean', [0.4377, 0.4438, 0.4728])
+        self.std = cfg.get('std', [0.1980, 0.2010, 0.1970])
         
-        # Transforms
+        # Transforms - SVHN images are 32x32
         self.transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -27,16 +27,16 @@ class CIFAR100DataModule:
             transforms.Normalize(self.mean, self.std)
         ])
         
-        # Load CIFAR-100
-        self.train_set = datasets.CIFAR100(
+        # Load SVHN (using train split for active learning)
+        self.train_set = datasets.SVHN(
             root=self.root, 
-            train=True, 
+            split='train',
             download=True, 
             transform=self.transform_train
         )
-        self.test_set = datasets.CIFAR100(
+        self.test_set = datasets.SVHN(
             root=self.root, 
-            train=False, 
+            split='test',
             download=True, 
             transform=self.transform_test
         )
@@ -74,9 +74,9 @@ class CIFAR100DataModule:
         """
         if transform is not None:
             # Create dataset copy with new transform
-            dataset = datasets.CIFAR100(
+            dataset = datasets.SVHN(
                 root=self.root, 
-                train=True, 
+                split='train',
                 download=False, 
                 transform=transform
             )

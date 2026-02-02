@@ -8,10 +8,10 @@ defaults:
 # Random seed
 seed: 42
 
-# Active Learning setup
-initial_labeled: 5000
-calibration_size: 5000
-budget_per_round: 2000
+# Active Learning setup (override per dataset in data/*.yaml)
+# initial_labeled: set per dataset
+# calibration_size: set per dataset
+# budget_per_round: set per dataset
 num_rounds: 21
 
 # Conformal Prediction
