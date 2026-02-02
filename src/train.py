@@ -67,8 +67,8 @@ def main(cfg: DictConfig):
     
     # Setup active learning splits
     labeled_idx, calib_idx, pool_idx = data_module.setup_active_learning(
-        initial_labeled=cfg.initial_labeled,
-        calibration_size=cfg.calibration_size,
+        initial_labeled=cfg.data.initial_labeled,
+        calibration_size=cfg.data.calibration_size,
         seed=cfg.seed
     )
     
@@ -170,7 +170,7 @@ def main(cfg: DictConfig):
             # Select samples using acquisition strategy
             selected_idx = strategy.select(
                 probs=pool_probs,
-                budget=cfg.budget_per_round,
+                budget=cfg.data.budget_per_round,
                 qhat=qhat
             )
             

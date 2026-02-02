@@ -9,10 +9,6 @@ defaults:
 seed: 42
 
 # Active Learning setup
-# Default values (overridden by dataset-specific configs in data/*.yaml)
-initial_labeled: 5000       # Default for CIFAR-10/100
-calibration_size: 5000      # Default for CIFAR-10/100
-budget_per_round: 2000      # Default for CIFAR-10/100
 num_rounds: 21
 
 # Conformal Prediction
