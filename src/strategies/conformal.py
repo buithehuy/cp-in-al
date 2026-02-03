@@ -63,6 +63,50 @@ class CPVShapedSampling(AcquisitionStrategy):
         return torch.topk(score, budget)[1]
 
 
+class CPVShapedEntropySampling(AcquisitionStrategy):
+    """CP V-shaped sampling with entropy-based prioritization for zero-setsize samples.
+    
+    Improves upon cp_v_shaped by using entropy to rank samples with set_size=0:
+    - set_size=0: Ranked by entropy (higher entropy = higher priority)
+    - set_size=1: Confident correct predictions (lowest priority)
+    - set_size>1: Uncertain predictions (increasing priority)
+    """
+    
+    def __init__(self):
+        super().__init__(name="cp_v_shaped_entropy")
+    
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with V-shaped scoring and entropy-based zero-set ranking.
+        
+        Args:
+            probs: Probability tensor of shape (n_samples, n_classes)
+            budget: Number of samples to select
+            qhat: Conformity score threshold
+            
+        Returns:
+            Tensor of selected indices
+        """
+        num_classes = probs.shape[1]
+        set_sizes = (probs >= (1 - qhat)).sum(dim=1).float()
+        
+        # Calculate entropy for all samples
+        entropy = -(probs * torch.log(probs + 1e-9)).sum(dim=1)
+        entropy_norm = entropy / np.log(num_classes)
+        
+        # V-shaped scoring with entropy for zero-setsize samples
+        score = torch.where(
+            set_sizes == 0,
+            # For empty sets: base score + entropy bonus
+            torch.tensor(num_classes + 1.0) + entropy_norm,
+            torch.where(
+                set_sizes == 1,
+                torch.tensor(0.0),  # Lowest score for singleton sets
+                set_sizes  # Increasing score for larger sets
+            )
+        )
+        return torch.topk(score, budget)[1]
+
+
 class CombinedSampling(AcquisitionStrategy):
     """Combined sampling - Entropy + CP Size (equal weighting)."""
     

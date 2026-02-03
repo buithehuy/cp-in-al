@@ -9,6 +9,7 @@ from .uncertainty import (
 from .conformal import (
     CPSizeSampling,
     CPVShapedSampling,
+    CPVShapedEntropySampling,
     CombinedSampling,
     CombinedVShapedSampling
 )
@@ -21,6 +22,7 @@ STRATEGIES = {
     "margin": MarginSampling,
     "cp_size": CPSizeSampling,
     "cp_v_shaped": CPVShapedSampling,
+    "cp_v_shaped_entropy": CPVShapedEntropySampling,
     "combined": CombinedSampling,
     "combined_v_shaped": CombinedVShapedSampling,
 }
@@ -51,6 +53,7 @@ __all__ = [
     'MarginSampling',
     'CPSizeSampling',
     'CPVShapedSampling',
+    'CPVShapedEntropySampling',
     'CombinedSampling',
     'CombinedVShapedSampling',
     'STRATEGIES',
