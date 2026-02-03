@@ -3,6 +3,7 @@ name: SVHN
 root: ./data
 num_classes: 10
 batch_size: 128
+num_workers: 2  # Number of DataLoader workers (reduce if getting warnings)
 
 # Normalization statistics
 mean: [0.4377, 0.4438, 0.4728]

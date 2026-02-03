@@ -3,6 +3,7 @@ name: CIFAR100
 root: ./data
 num_classes: 100
 batch_size: 128
+num_workers: 2  # Number of DataLoader workers (reduce if getting warnings)
 
 # Normalization statistics
 mean: [0.5071, 0.4867, 0.4408]

@@ -9,6 +9,7 @@ class CIFAR100DataModule:
         self.cfg = cfg
         self.root = cfg.root
         self.batch_size = cfg.get('batch_size', 128)
+        self.num_workers = cfg.get('num_workers', 2)  # Default to 2 to avoid warnings
         
         # CIFAR-100 specific normalization
         self.mean = cfg.get('mean', [0.5071, 0.4867, 0.4408])
@@ -88,7 +89,7 @@ class CIFAR100DataModule:
             subset, 
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=4,
+            num_workers=self.num_workers,
             pin_memory=True
         )
     
@@ -102,6 +103,6 @@ class CIFAR100DataModule:
             self.test_set,
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=self.num_workers,
             pin_memory=True
         )
