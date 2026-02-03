@@ -7,3 +7,4 @@ weight_decay: 5e-4
 optimizer: sgd
 scheduler: cosine
 device: cuda
+use_amp: true  # Automatic Mixed Precision (2-3x speedup on GPU)

@@ -154,7 +154,8 @@ def main(cfg: DictConfig):
             lr=cfg.trainer.lr,
             momentum=cfg.trainer.momentum,
             weight_decay=cfg.trainer.weight_decay,
-            device=device
+            device=device,
+            use_amp=cfg.trainer.get('use_amp', True)  # Default to True for 2-3x speedup
         )
         samples_trained = len(labeled_idx)
         
