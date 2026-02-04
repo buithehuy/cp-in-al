@@ -2,7 +2,9 @@
 from .conformal_prediction import (
     compute_qhat,
     evaluate_conformal_prediction,
-    get_probs
+    get_probs,
+    compute_qhat_aps,
+    evaluate_aps
 )
 from .training import train_round, eval_acc
 from .visualization import (
@@ -23,6 +25,8 @@ __all__ = [
     'compute_qhat',
     'evaluate_conformal_prediction',
     'get_probs',
+    'compute_qhat_aps',
+    'evaluate_aps',
     'train_round',
     'eval_acc',
     'plot_accuracy_vs_samples',

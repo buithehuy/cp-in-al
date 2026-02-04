@@ -16,6 +16,8 @@ from strategies import get_strategy
 from utils import (
     compute_qhat,
     evaluate_conformal_prediction,
+    compute_qhat_aps,
+    evaluate_aps,
     get_probs,
     train_round,
     eval_acc
@@ -121,8 +123,14 @@ def main(cfg: DictConfig):
     for round_idx in range(cfg.num_rounds + 1):
         # Evaluate model
         acc = eval_acc(model, test_loader, device)
-        qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
-        cp_metrics = evaluate_conformal_prediction(model, test_loader, qhat, device)
+        
+        # Use APS-specific methods if strategy is cp_aps
+        if cfg.strategy.name == 'cp_aps':
+            qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
+            cp_metrics = evaluate_aps(model, test_loader, qhat, device)
+        else:
+            qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
+            cp_metrics = evaluate_conformal_prediction(model, test_loader, qhat, device)
         
         # Record results
         results['rounds'].append(round_idx)
@@ -161,8 +169,11 @@ def main(cfg: DictConfig):
         
         # Select new samples (skip last round)
         if round_idx < cfg.num_rounds - 1:
-            # Compute qhat on calibration set
-            qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
+            # Compute qhat on calibration set (use APS method if strategy is cp_aps)
+            if cfg.strategy.name == 'cp_aps':
+                qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
+            else:
+                qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             
             # Get probabilities for pool
             pool_loader = data_module.get_loader(pool_idx, shuffle=False)
