@@ -121,10 +121,12 @@ def compute_qhat_aps(model, loader, alpha=0.1, device='cuda'):
         # Conformity score is cumulative prob up to and including true class
         scores[i] = sorted_probs[i, :rank+1].sum().item()
     
-    # Compute quantile
+    # CRITICAL: For APS, higher score = easier to cover (true class appears early)
+    # So we need the ALPHA quantile (not 1-alpha) to get the threshold that
+    # ensures (1-alpha) coverage
     n = len(labels)
-    k = int(np.ceil((n + 1) * (1 - alpha)))
-    k = min(k - 1, n - 1)
+    k = int(np.ceil((n + 1) * alpha))  # Changed from (1-alpha) to alpha
+    k = min(max(k - 1, 0), n - 1)  # Ensure valid index
     
     qhat = torch.sort(scores)[0][k].item()
     return qhat
