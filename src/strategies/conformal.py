@@ -126,7 +126,7 @@ class CPAPSSampling(AcquisitionStrategy):
         Args:
             probs: Probability tensor of shape (n_samples, n_classes)
             budget: Number of samples to select
-            qhat: Conformity score threshold
+            qhat: APS conformity score threshold (cumulative probability)
             
         Returns:
             Tensor of selected indices
@@ -137,9 +137,9 @@ class CPAPSSampling(AcquisitionStrategy):
         # Compute cumulative sum of sorted probabilities
         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
         
-        # Find where cumulative sum first exceeds 1 - qhat
-        # This gives us the adaptive prediction set size for each sample
-        threshold = 1 - qhat
+        # For APS, qhat is already a cumulative probability threshold
+        # Find where cumulative sum first exceeds qhat
+        threshold = qhat
         
         # For each sample, find the index where cumsum first exceeds threshold
         # Add 1 because we need to include that class
