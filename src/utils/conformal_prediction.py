@@ -213,11 +213,14 @@ def compute_qhat_rmcp(model, loader, alpha=0.1, device='cuda'):
         other_probs = torch.cat([probs[i, :true_class], probs[i, true_class+1:]])
         scores[i] = probs[i, true_class] - other_probs.mean()
     
-    # Compute quantile at (1-alpha)
-    # Higher score = more confident, so use (1-alpha) like standard CP
+    # CRITICAL: RMCP score interpretation
+    # High score (e.g., +0.7) = p_true >> mean(others) = CONFIDENT = easy to cover
+    # Low score (e.g., -0.2) = p_true << mean(others) = UNCERTAIN = hard to cover
+    # This is similar to APS (reversed from standard CP)!
+    # So we need ALPHA quantile (not 1-alpha) to get proper coverage
     n = len(scores)
-    k = int(np.ceil((n + 1) * (1 - alpha)))
-    k = min(k - 1, n - 1)
+    k = int(np.ceil((n + 1) * alpha))  # Changed from (1-alpha) to alpha
+    k = min(max(k - 1, 0), n - 1)
     
     qhat = torch.sort(scores)[0][k].item()
     return qhat
