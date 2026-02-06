@@ -9,6 +9,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from data import CIFAR10DataModule
 from data import CIFAR100DataModule
+from data import CIFAR100NDataModule
 from data import STL10DataModule
 from data import SVHNDataModule
 from models import ResNet18
@@ -62,6 +63,8 @@ def main(cfg: DictConfig):
         data_module = CIFAR10DataModule(cfg.data)
     elif cfg.data.name == "CIFAR100":
         data_module = CIFAR100DataModule(cfg.data)
+    elif cfg.data.name == "CIFAR100N":
+        data_module = CIFAR100NDataModule(cfg.data)
     elif cfg.data.name == "STL10":
         data_module = STL10DataModule(cfg.data)
     elif cfg.data.name == "SVHN":
