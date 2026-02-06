@@ -183,3 +183,93 @@ def evaluate_aps(model, loader, qhat, device='cuda'):
         'zero_sets': zero_sets
     }
 
+
+def compute_qhat_rmcp(model, loader, alpha=0.1, device='cuda'):
+    """Compute RMCP (Relative Margin Conformal Prediction) conformity score threshold.
+    
+    RMCP uses relative margin scores: score_k = p_k - mean(p_j for j != k)
+    This measures how much a class probability exceeds the average of others.
+    
+    Args:
+        model: Trained model
+        loader: Calibration DataLoader
+        alpha: Miscoverage level (e.g., 0.1 for 90% coverage)
+        device: Device to use
+        
+    Returns:
+        qhat: RMCP conformity score threshold
+    """
+    probs, labels = get_probs(model, loader, device)
+    n_samples, n_classes = probs.shape
+    
+    # Compute conformity scores for true class on calibration set
+    scores = torch.zeros(n_samples)
+    
+    for i in range(n_samples):
+        true_class = labels[i].item()
+        
+        # Compute relative margin score for true class
+        # score = p_true - mean(p_j for j != true)
+        other_probs = torch.cat([probs[i, :true_class], probs[i, true_class+1:]])
+        scores[i] = probs[i, true_class] - other_probs.mean()
+    
+    # Compute quantile at (1-alpha)
+    # Higher score = more confident, so use (1-alpha) like standard CP
+    n = len(scores)
+    k = int(np.ceil((n + 1) * (1 - alpha)))
+    k = min(k - 1, n - 1)
+    
+    qhat = torch.sort(scores)[0][k].item()
+    return qhat
+
+
+def evaluate_rmcp(model, loader, qhat, device='cuda'):
+    """Evaluate RMCP (Relative Margin Conformal Prediction) metrics.
+    
+    Args:
+        model: Trained model
+        loader: Test DataLoader
+        qhat: RMCP conformity score threshold
+        device: Device to use
+        
+    Returns:
+        Dictionary with RMCP metrics (coverage, avg_set_size, zero_sets)
+    """
+    probs, labels = get_probs(model, loader, device)
+    n_samples, n_classes = probs.shape
+    
+    coverage_count = 0
+    set_sizes = []
+    zero_count = 0
+    
+    for i in range(n_samples):
+        # Compute relative margin scores for all classes
+        scores = torch.zeros(n_classes)
+        
+        for k in range(n_classes):
+            # score_k = p_k - mean(p_j for j != k)
+            other_probs = torch.cat([probs[i, :k], probs[i, k+1:]])
+            scores[k] = probs[i, k] - other_probs.mean()
+        
+        # Generate prediction set: classes with score >= qhat
+        pred_set = (scores >= qhat).nonzero(as_tuple=True)[0]
+        set_size = len(pred_set)
+        set_sizes.append(set_size)
+        
+        if set_size == 0:
+            zero_count += 1
+        
+        # Check if true label is in prediction set
+        if labels[i] in pred_set:
+            coverage_count += 1
+    
+    coverage = coverage_count / n_samples
+    avg_set_size = np.mean(set_sizes)
+    
+    return {
+        'coverage': coverage,
+        'avg_set_size': avg_set_size,
+        'zero_sets': zero_count
+    }
+
+

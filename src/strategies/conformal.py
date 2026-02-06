@@ -157,6 +157,49 @@ class CPAPSSampling(AcquisitionStrategy):
         return torch.topk(set_sizes, budget)[1]
 
 
+class RMCPSampling(AcquisitionStrategy):
+    """RMCP (Relative Margin Conformal Prediction) sampling strategy.
+    
+    Uses relative margin scores: score_k = p_k - mean(p_j for j != k)
+    Selects samples with largest prediction sets based on RMCP.
+    
+    This strategy combines margin-based uncertainty with conformal prediction,
+    measuring how much each class exceeds the average of other classes.
+    """
+    
+    def __init__(self):
+        super().__init__(name="cp_rmcp")
+    
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with largest RMCP prediction set sizes.
+        
+        Args:
+            probs: Probability tensor of shape (n_samples, n_classes)
+            budget: Number of samples to select
+            qhat: RMCP conformity score threshold
+            
+        Returns:
+            Tensor of selected indices
+        """
+        n_samples, n_classes = probs.shape
+        set_sizes = torch.zeros(n_samples)
+        
+        for i in range(n_samples):
+            # Compute relative margin scores for all classes
+            scores = torch.zeros(n_classes)
+            
+            for k in range(n_classes):
+                # score_k = p_k - mean(p_j for j != k)
+                other_probs = torch.cat([probs[i, :k], probs[i, k+1:]])
+                scores[k] = probs[i, k] - other_probs.mean()
+            
+            # Count classes with score >= qhat
+            set_sizes[i] = (scores >= qhat).sum().float()
+        
+        # Select samples with largest set sizes (most uncertain)
+        return torch.topk(set_sizes, budget)[1]
+
+
 class CombinedSampling(AcquisitionStrategy):
     """Combined sampling - Entropy + CP Size (equal weighting)."""
     

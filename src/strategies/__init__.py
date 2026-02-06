@@ -11,6 +11,7 @@ from .conformal import (
     CPVShapedSampling,
     CPVShapedEntropySampling,
     CPAPSSampling,
+    RMCPSampling,
     CombinedSampling,
     CombinedVShapedSampling
 )
@@ -25,6 +26,7 @@ STRATEGIES = {
     "cp_v_shaped": CPVShapedSampling,
     "cp_v_shaped_entropy": CPVShapedEntropySampling,
     "cp_aps": CPAPSSampling,
+    "cp_rmcp": RMCPSampling,
     "combined": CombinedSampling,
     "combined_v_shaped": CombinedVShapedSampling,
 }
@@ -57,6 +59,7 @@ __all__ = [
     'CPVShapedSampling',
     'CPVShapedEntropySampling',
     'CPAPSSampling',
+    'RMCPSampling',
     'CombinedSampling',
     'CombinedVShapedSampling',
     'STRATEGIES',

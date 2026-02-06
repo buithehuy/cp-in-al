@@ -18,6 +18,8 @@ from utils import (
     evaluate_conformal_prediction,
     compute_qhat_aps,
     evaluate_aps,
+    compute_qhat_rmcp,
+    evaluate_rmcp,
     get_probs,
     train_round,
     eval_acc
@@ -124,10 +126,13 @@ def main(cfg: DictConfig):
         # Evaluate model
         acc = eval_acc(model, test_loader, device)
         
-        # Use APS-specific methods if strategy is cp_aps
+        # Use strategy-specific methods
         if cfg.strategy.name == 'cp_aps':
             qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_aps(model, test_loader, qhat, device)
+        elif cfg.strategy.name == 'cp_rmcp':
+            qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
+            cp_metrics = evaluate_rmcp(model, test_loader, qhat, device)
         else:
             qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_conformal_prediction(model, test_loader, qhat, device)
@@ -169,9 +174,11 @@ def main(cfg: DictConfig):
         
         # Select new samples (skip last round)
         if round_idx < cfg.num_rounds - 1:
-            # Compute qhat on calibration set (use APS method if strategy is cp_aps)
+            # Compute qhat on calibration set (use strategy-specific method)
             if cfg.strategy.name == 'cp_aps':
                 qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
+            elif cfg.strategy.name == 'cp_rmcp':
+                qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
             else:
                 qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             
