@@ -123,7 +123,8 @@ class CIFAR100NDataModule:
         
         # Load noisy labels file
         print(f"Loading CIFAR-100N noisy labels (type: {self.noise_type})...")
-        noisy_data = torch.load(self.noisy_labels_path)
+        # Use weights_only=False for PyTorch 2.6+ compatibility with numpy data
+        noisy_data = torch.load(self.noisy_labels_path, weights_only=False)
         
         # Select appropriate labels
         if self.noise_type == 'noisy':
