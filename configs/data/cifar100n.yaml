@@ -8,10 +8,11 @@ num_workers: 2
 noise_type: noisy  # Options: clean, noisy, worst
 noisy_labels_path: data/CIFAR-100_human.pt
 
-# AL parameters (10%-10%-80% split of 50k training samples)
-initial_labeled_pct: 0.1  # 5000 samples
-calibration_size_pct: 0.1  # 5000 samples
-budget_per_round_pct: 0.02  # 1000 samples per round
+# Active Learning parameters (Train size: 50,000)
+# 10% calibration, 10% initial labeled, 80% pool / 20 rounds
+initial_labeled: 5000      # 10% of 50,000
+calibration_size: 5000     # 10% of 50,000
+budget_per_round: 2000     # 40,000 / 20 rounds
 
 # CIFAR-100 normalization
 mean: [0.5071, 0.4867, 0.4408]
