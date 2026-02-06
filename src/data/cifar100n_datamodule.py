@@ -16,8 +16,12 @@ class CIFAR100NDataModule:
     - worst: Worst-case aggregated labels (higher noise)
     """
     
-    # URL for CIFAR-100N noisy labels
-    NOISY_LABELS_URL = "http://www.yliuu.com/web-cifarN/files/CIFAR-100_human.pt"
+    # Multiple mirror URLs for CIFAR-100N noisy labels
+    NOISY_LABELS_URLS = [
+        "http://www.yliuu.com/web-cifarN/files/CIFAR-100_human.pt",
+        "https://github.com/UCSC-REAL/cifar-10-100n/raw/main/data/CIFAR-100_human.pt",
+        "https://huggingface.co/datasets/nateraw/cifar-100n/resolve/main/CIFAR-100_human.pt",
+    ]
     
     def __init__(self, cfg):
         self.cfg = cfg
@@ -72,16 +76,45 @@ class CIFAR100NDataModule:
         
         if not os.path.exists(self.noisy_labels_path):
             print(f"Downloading CIFAR-100N noisy labels to {self.noisy_labels_path}...")
-            try:
-                urllib.request.urlretrieve(self.NOISY_LABELS_URL, self.noisy_labels_path)
-                print("Download complete!")
-            except Exception as e:
+            
+            # Try multiple mirror URLs
+            success = False
+            last_error = None
+            
+            for i, url in enumerate(self.NOISY_LABELS_URLS):
+                try:
+                    print(f"  Attempting mirror {i+1}/{len(self.NOISY_LABELS_URLS)}: {url}")
+                    urllib.request.urlretrieve(url, self.noisy_labels_path)
+                    print("  ✓ Download complete!")
+                    success = True
+                    break
+                except Exception as e:
+                    last_error = e
+                    print(f"  ✗ Failed: {e}")
+                    continue
+            
+            if not success:
+                # Provide detailed manual download instructions
                 raise RuntimeError(
-                    f"Failed to download noisy labels. Please download manually from:\n"
-                    f"{self.NOISY_LABELS_URL}\n"
-                    f"and save to {self.noisy_labels_path}\n"
-                    f"Error: {e}"
+                    f"\n{'='*70}\n"
+                    f"CIFAR-100N noisy labels download failed from all mirrors.\n"
+                    f"{'='*70}\n\n"
+                    f"Please download manually using ONE of these methods:\n\n"
+                    f"METHOD 1 - Direct download:\n"
+                    f"  wget https://github.com/UCSC-REAL/cifar-10-100n/raw/main/data/CIFAR-100_human.pt \\\n"
+                    f"       -O {self.noisy_labels_path}\n\n"
+                    f"METHOD 2 - Using curl:\n"
+                    f"  curl -L https://github.com/UCSC-REAL/cifar-10-100n/raw/main/data/CIFAR-100_human.pt \\\n"
+                    f"       -o {self.noisy_labels_path}\n\n"
+                    f"METHOD 3 - Clone repository:\n"
+                    f"  git clone https://github.com/UCSC-REAL/cifar-10-100n.git\n"
+                    f"  cp cifar-10-100n/data/CIFAR-100_human.pt {self.noisy_labels_path}\n\n"
+                    f"Then re-run your command.\n"
+                    f"{'='*70}\n"
+                    f"Last error: {last_error}\n"
+                    f"{'='*70}"
                 )
+
     
     def _load_and_apply_noisy_labels(self):
         """Load and apply noisy labels based on noise_type."""
