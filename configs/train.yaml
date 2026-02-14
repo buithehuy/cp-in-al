@@ -9,7 +9,7 @@ defaults:
 seed: 42
 
 # Active Learning setup
-num_rounds: 10
+num_rounds: 21
 
 # Conformal Prediction
 cp_alpha: 0.1
