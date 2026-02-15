@@ -107,54 +107,90 @@ class CPVShapedEntropySampling(AcquisitionStrategy):
         return torch.topk(score, budget)[1]
 
 
+# class CPAPSSampling(AcquisitionStrategy):
+#     """Adaptive Prediction Sets (APS) - conformal prediction with cumulative probability.
+    
+#     APS differs from standard conformal prediction by using an adaptive threshold:
+#     - Sort class probabilities in descending order
+#     - Include classes cumulatively until sum exceeds 1 - qhat
+#     - Produces smaller, more focused prediction sets
+#     - Selection prioritizes samples with larger APS sets (more uncertain)
+#     """
+    
+#     def __init__(self):
+#         super().__init__(name="cp_aps")
+    
+#     def select(self, probs, budget, qhat, **kwargs):
+#         """Select samples with largest APS prediction set sizes.
+        
+#         Args:
+#             probs: Probability tensor of shape (n_samples, n_classes)
+#             budget: Number of samples to select
+#             qhat: APS conformity score threshold (cumulative probability)
+            
+#         Returns:
+#             Tensor of selected indices
+#         """
+#         # Sort probabilities in descending order for each sample
+#         sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
+        
+#         # Compute cumulative sum of sorted probabilities
+#         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
+        
+#         # For APS, qhat is already a cumulative probability threshold
+#         # Find where cumulative sum first exceeds qhat
+#         threshold = qhat
+        
+#         # For each sample, find the index where cumsum first exceeds threshold
+#         # Add 1 because we need to include that class
+#         set_sizes = torch.zeros(probs.shape[0])
+#         for i in range(probs.shape[0]):
+#             # Find first index where cumsum exceeds threshold
+#             exceeds = (cumsum_probs[i] >= threshold).nonzero(as_tuple=True)[0]
+#             if len(exceeds) > 0:
+#                 set_sizes[i] = exceeds[0].item() + 1  # +1 to include that class
+#             else:
+#                 # If never exceeds threshold, include all classes
+#                 set_sizes[i] = probs.shape[1]
+        
+#         # Select samples with largest set sizes (most uncertain)
+#         return torch.topk(set_sizes, budget)[1]
+
+import torch
+
 class CPAPSSampling(AcquisitionStrategy):
-    """Adaptive Prediction Sets (APS) - conformal prediction with cumulative probability.
-    
-    APS differs from standard conformal prediction by using an adaptive threshold:
-    - Sort class probabilities in descending order
-    - Include classes cumulatively until sum exceeds 1 - qhat
-    - Produces smaller, more focused prediction sets
-    - Selection prioritizes samples with larger APS sets (more uncertain)
-    """
-    
     def __init__(self):
         super().__init__(name="cp_aps")
     
     def select(self, probs, budget, qhat, **kwargs):
-        """Select samples with largest APS prediction set sizes.
-        
-        Args:
-            probs: Probability tensor of shape (n_samples, n_classes)
-            budget: Number of samples to select
-            qhat: APS conformity score threshold (cumulative probability)
-            
-        Returns:
-            Tensor of selected indices
         """
-        # Sort probabilities in descending order for each sample
+        Tối ưu hóa bằng Vectorization và xử lý tie-breaking.
+        """
+        # 1. Sắp xếp xác suất giảm dần
         sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
         
-        # Compute cumulative sum of sorted probabilities
+        # 2. Tính tổng tích lũy
         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
         
-        # For APS, qhat is already a cumulative probability threshold
-        # Find where cumulative sum first exceeds qhat
-        threshold = qhat
+        # 3. Tính toán set_sizes (Vectorized)
+        # Cách hoạt động: Đếm xem có bao nhiêu lớp có tổng tích lũy CHƯA đạt ngưỡng qhat,
+        # sau đó cộng thêm 1 (lớp đầu tiên khiến nó vượt ngưỡng).
+        # (cumsum_probs < qhat).sum(dim=1) trả về số lượng các phần tử < qhat.
+        set_sizes = (cumsum_probs < qhat).sum(dim=1).float() + 1
         
-        # For each sample, find the index where cumsum first exceeds threshold
-        # Add 1 because we need to include that class
-        set_sizes = torch.zeros(probs.shape[0])
-        for i in range(probs.shape[0]):
-            # Find first index where cumsum exceeds threshold
-            exceeds = (cumsum_probs[i] >= threshold).nonzero(as_tuple=True)[0]
-            if len(exceeds) > 0:
-                set_sizes[i] = exceeds[0].item() + 1  # +1 to include that class
-            else:
-                # If never exceeds threshold, include all classes
-                set_sizes[i] = probs.shape[1]
+        # Đảm bảo set_size không vượt quá số lượng class thực tế
+        set_sizes = torch.clamp(set_sizes, max=probs.shape[1])
         
-        # Select samples with largest set sizes (most uncertain)
-        return torch.topk(set_sizes, budget)[1]
+        # 4. Tie-breaking (Quan trọng cho Sampling)
+        # Nếu nhiều mẫu cùng size, mẫu nào có xác suất tại ngưỡng mập mờ hơn sẽ được ưu tiên.
+        # Thêm một chút giá trị từ chính độ lệch xác suất để làm mượt thứ hạng.
+        jitter = cumsum_probs.mean(dim=1) * 1e-6
+        uncertainty_score = set_sizes + jitter
+        
+        # 5. Chọn các mẫu có kích thước tập dự đoán lớn nhất
+        _, indices = torch.topk(uncertainty_score, budget)
+        
+        return indices
 
 
 class RMCPSampling(AcquisitionStrategy):
