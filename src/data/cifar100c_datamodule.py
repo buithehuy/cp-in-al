@@ -57,6 +57,22 @@ class CIFAR100CDataModule:
     
     def setup_active_learning(self, initial_labeled, calibration_size, seed=42):
         """Set up active learning data splits and inject corruption."""
+        if hasattr(self, '_is_corrupted') and self._is_corrupted:
+            print("Warning: Corruption already applied. Skipping re-injection.")
+            # We need to reconstruct indices since we don't return them before
+            # But normally setup_active_learning is called ONCE. 
+            # If called again, it Re-shuffles. If we re-shuffle, we might mix corrupted and clean data!
+            # So, if already corrupted, we should probably reload the dataset OR throw error.
+            # Ideally, reload dataset to be safe.
+            print("Reloading clean dataset to ensure correct split...")
+            self.train_set = datasets.CIFAR100(
+                root=self.root, 
+                train=True, 
+                download=True, 
+                transform=self.transform_train
+            )
+            self._is_corrupted = False
+            
         np.random.seed(seed)
         idx = np.random.permutation(len(self.train_set))
         
@@ -71,6 +87,7 @@ class CIFAR100CDataModule:
         if self.corruption_ratio > 0:
             print(f"Pool size: {len(pool_idx)}")
             self._inject_corruption(pool_idx, seed)
+            self._is_corrupted = True
             
         return labeled_idx, calib_idx, pool_idx
     
