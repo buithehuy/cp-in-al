@@ -1,0 +1,17 @@
+# CUB-200-2011 dataset configuration
+name: CUB200
+root: ./data
+num_classes: 200
+batch_size: 64  # Reduced due to larger image size (224x224)
+num_workers: 2  # Number of DataLoader workers (reduce if getting warnings)
+image_size: 224  # Standard size for fine-grained classification
+
+# Normalization statistics (calculated from CUB-200-2011)
+mean: [0.4859, 0.4996, 0.4318]
+std: [0.2321, 0.2277, 0.2665]
+
+# Active Learning parameters (Train size: 5,994)
+# 10% calibration, 10% initial labeled, 80% pool / 20 rounds
+initial_labeled: 599       # 10% of 5,994
+calibration_size: 599      # 10% of 5,994
+budget_per_round: 240      # 4,796 / 20 rounds

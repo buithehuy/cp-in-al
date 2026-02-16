@@ -5,6 +5,7 @@ from .cifar100n_datamodule import CIFAR100NDataModule
 from .cifar100c_datamodule import CIFAR100CDataModule
 from .stl10_datamodule import STL10DataModule
 from .svhn_datamodule import SVHNDataModule
+from .cub200_datamodule import CUB200DataModule
 
 __all__ = [
     'CIFAR10DataModule',
@@ -13,4 +14,5 @@ __all__ = [
     'CIFAR100CDataModule',
     'STL10DataModule',
     'SVHNDataModule',
+    'CUB200DataModule',
 ]
