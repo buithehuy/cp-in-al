@@ -81,7 +81,31 @@ def compute_accuracy_gap(results_dict, baseline='random'):
     return gaps
 
 
-def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), dataset=None, ylim=None):
+def _get_color_map(strategies, custom_colors=None):
+    """Get color map for a list of strategies.
+    
+    Args:
+        strategies: List of strategy names
+        custom_colors: Optional list of hex colors to use
+        
+    Returns:
+        Dictionary mapping strategy names to colors
+    """
+    if not custom_colors:
+        return COLORS
+        
+    # Sort strategies to ensure deterministic assignment
+    sorted_strategies = sorted(strategies)
+    
+    color_map = COLORS.copy()
+    for i, strategy in enumerate(sorted_strategies):
+        if i < len(custom_colors):
+            color_map[strategy] = custom_colors[i]
+            
+    return color_map
+
+
+def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), dataset=None, ylim=None, colors=None):
     """Plot accuracy vs number of labeled samples for all strategies.
     
     Args:
@@ -90,8 +114,12 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), data
         figsize: Figure size (width, height)
         dataset: Dataset name for intelligent y-axis scaling (e.g., 'svhn')
         ylim: Manual y-axis limits as tuple (min, max). Overrides automatic scaling.
+        colors: Optional list of colors to use for strategies (assigned alphabetically)
     """
     plt.figure(figsize=figsize)
+    
+    # Get color map
+    strategy_colors = _get_color_map(results_dict.keys(), colors)
     
     all_accuracies = []
     for strategy_name, results in results_dict.items():
@@ -99,7 +127,7 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), data
             results['labeled_sizes'],
             results['accuracies'],
             label=LABELS.get(strategy_name, strategy_name),
-            color=COLORS.get(strategy_name, None),
+            color=strategy_colors.get(strategy_name, None),
             marker='o',
             markersize=3,
             linewidth=1.5
@@ -132,9 +160,9 @@ def plot_accuracy_vs_samples(results_dict, save_path=None, figsize=(14, 6), data
         print(f"Saved plot to: {save_path}")
     
     plt.show()
-    
 
-def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(14, 6)):
+
+def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(14, 6), colors=None):
     """Plot accuracy gap compared to baseline strategy.
     
     Args:
@@ -142,6 +170,7 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(
         baseline: Baseline strategy name (default: 'random')
         save_path: Optional path to save the figure
         figsize: Figure size (width, height)
+        colors: Optional list of colors to use
     """
     gaps = compute_accuracy_gap(results_dict, baseline)
     
@@ -149,6 +178,9 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(
         return
     
     plt.figure(figsize=figsize)
+    
+    # Get color map
+    strategy_colors = _get_color_map(results_dict.keys(), colors)
     
     for strategy_name, gap in gaps.items():
         if strategy_name == baseline:
@@ -159,7 +191,7 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(
             results['labeled_sizes'],
             gap,
             label=LABELS.get(strategy_name, strategy_name),
-            color=COLORS.get(strategy_name, None),
+            color=strategy_colors.get(strategy_name, None),
             marker='o',
             markersize=3,
             linewidth=1.5
@@ -182,7 +214,7 @@ def plot_accuracy_gap(results_dict, baseline='random', save_path=None, figsize=(
     plt.show()
 
 
-def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=(14, 6)):
+def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=(14, 6), colors=None):
     """Plot conformal prediction coverage over rounds.
     
     Args:
@@ -190,15 +222,19 @@ def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=
         target_coverage: Target coverage level (default: 0.9 for alpha=0.1)
         save_path: Optional path to save the figure
         figsize: Figure size (width, height)
+        colors: Optional list of colors to use
     """
     plt.figure(figsize=figsize)
+    
+    # Get color map
+    strategy_colors = _get_color_map(results_dict.keys(), colors)
     
     for strategy_name, results in results_dict.items():
         plt.plot(
             results['labeled_sizes'],
             results['cp_coverage'],
             label=LABELS.get(strategy_name, strategy_name),
-            color=COLORS.get(strategy_name, None),
+            color=strategy_colors.get(strategy_name, None),
             marker='o',
             markersize=3,
             linewidth=1.5
@@ -222,22 +258,26 @@ def plot_cp_coverage(results_dict, target_coverage=0.9, save_path=None, figsize=
     plt.show()
 
 
-def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6)):
+def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6), colors=None):
     """Plot average conformal prediction set size.
     
     Args:
         results_dict: Dictionary mapping strategy names to results
         save_path: Optional path to save the figure
         figsize: Figure size (width, height)
+        colors: Optional list of colors to use
     """
     plt.figure(figsize=figsize)
+    
+    # Get color map
+    strategy_colors = _get_color_map(results_dict.keys(), colors)
     
     for strategy_name, results in results_dict.items():
         plt.plot(
             results['labeled_sizes'],
             results['cp_avg_set_size'],
             label=LABELS.get(strategy_name, strategy_name),
-            color=COLORS.get(strategy_name, None),
+            color=strategy_colors.get(strategy_name, None),
             marker='o',
             markersize=3,
             linewidth=1.5
@@ -257,7 +297,7 @@ def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6)):
     plt.show()
 
 
-def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, ylim=None):
+def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, ylim=None, colors=None):
     """Plot main Active Learning metrics (Accuracy, Gap, AULC).
     
     Args:
@@ -266,8 +306,12 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, yli
         show: Whether to display plots
         dataset: Dataset name for intelligent y-axis scaling (e.g., 'svhn')
         ylim: Manual y-axis limits as tuple (min, max). Overrides automatic scaling.
+        colors: Optional list of colors to use
     """
     fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+    
+    # Get color map
+    strategy_colors = _get_color_map(results_dict.keys(), colors)
     
     # 1. Accuracy vs Samples
     ax = axes[0]
@@ -277,7 +321,7 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, yli
             results['labeled_sizes'],
             results['accuracies'],
             label=LABELS.get(strategy_name, strategy_name),
-            color=COLORS.get(strategy_name, None),
+            color=strategy_colors.get(strategy_name, None),
             marker='o',
             markersize=3,
             linewidth=1.5  # Thinner lines
@@ -316,7 +360,7 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, yli
                 results['labeled_sizes'],
                 gap,
                 label=LABELS.get(strategy_name, strategy_name),
-                color=COLORS.get(strategy_name, None),
+                color=strategy_colors.get(strategy_name, None),
                 marker='o',
                 markersize=3,
                 linewidth=1.5  # Thinner lines
@@ -332,7 +376,7 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, yli
     ax = axes[2]
     strategy_names = []
     aulc_values = []
-    colors = []
+    bar_colors = []
     
     # Sort by AULC descending
     sorted_items = sorted(results_dict.items(), 
@@ -343,9 +387,9 @@ def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, yli
         aulc = compute_aulc(results['labeled_sizes'], results['accuracies'])
         strategy_names.append(LABELS.get(strategy_name, strategy_name))
         aulc_values.append(aulc)
-        colors.append(COLORS.get(strategy_name, '#808080'))
+        bar_colors.append(strategy_colors.get(strategy_name, '#808080'))
     
-    bars = ax.barh(strategy_names, aulc_values, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+    bars = ax.barh(strategy_names, aulc_values, color=bar_colors, alpha=0.8, edgecolor='black', linewidth=1.5)
     ax.set_xlabel('AULC (Normalized - Avg Accuracy %)', fontsize=13)
     ax.set_title('AULC Comparison', fontsize=14, fontweight='bold')
     ax.grid(True, alpha=0.3, axis='x')

@@ -34,9 +34,11 @@ Examples:
   
   # Print summary table only
   python plot_results.py outputs/ --table-only
-  
   # Export accuracy table to CSV
   python plot_results.py outputs/ --export-csv accuracy_results.csv
+  
+  # Plot with custom colors
+  python plot_results.py outputs/ --colors red blue green
         """
     )
     
@@ -75,6 +77,11 @@ Examples:
         metavar=('MIN', 'MAX'),
         help='Y-axis limits for accuracy plot (e.g., --ylim 80 100)'
     )
+    parser.add_argument(
+        '--colors',
+        nargs='+',
+        help='List of colors to use for strategies (e.g., --colors red blue green)'
+    )
     
     args = parser.parse_args()
     
@@ -112,23 +119,23 @@ Examples:
     if args.plot == 'all':
         print("\nGenerating comprehensive plots...")
         ylim = tuple(args.ylim) if args.ylim else None
-        plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset, ylim=ylim)
+        plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset, ylim=ylim, colors=args.colors)
         
     elif args.plot == 'accuracy':
         print("\nGenerating accuracy plot...")
         save_path = os.path.join(args.save_dir, 'accuracy.png') if args.save_dir else None
         ylim = tuple(args.ylim) if args.ylim else None
-        plot_accuracy_vs_samples(results_dict, save_path=save_path, dataset=dataset, ylim=ylim)
+        plot_accuracy_vs_samples(results_dict, save_path=save_path, dataset=dataset, ylim=ylim, colors=args.colors)
         
     elif args.plot == 'coverage':
         print("\nGenerating coverage plot...")
         save_path = os.path.join(args.save_dir, 'coverage.png') if args.save_dir else None
-        plot_cp_coverage(results_dict, save_path=save_path)
+        plot_cp_coverage(results_dict, save_path=save_path, colors=args.colors)
         
     elif args.plot == 'set_size':
         print("\nGenerating set size plot...")
         save_path = os.path.join(args.save_dir, 'set_size.png') if args.save_dir else None
-        plot_cp_set_size(results_dict, save_path=save_path)
+        plot_cp_set_size(results_dict, save_path=save_path, colors=args.colors)
 
 
 if __name__ == '__main__':
