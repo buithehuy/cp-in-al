@@ -163,33 +163,31 @@ class CPAPSSampling(AcquisitionStrategy):
         super().__init__(name="cp_aps")
     
     def select(self, probs, budget, qhat, **kwargs):
-        """
-        Tối ưu hóa bằng Vectorization và xử lý tie-breaking.
-        """
-        # 1. Sắp xếp xác suất giảm dần
+        # 1. Sort xác suất
         sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
-        
-        # 2. Tính tổng tích lũy
         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
         
-        # 3. Tính toán set_sizes (Vectorized)
-        # Cách hoạt động: Đếm xem có bao nhiêu lớp có tổng tích lũy CHƯA đạt ngưỡng qhat,
-        # sau đó cộng thêm 1 (lớp đầu tiên khiến nó vượt ngưỡng).
-        # (cumsum_probs < qhat).sum(dim=1) trả về số lượng các phần tử < qhat.
-        set_sizes = (cumsum_probs < qhat).sum(dim=1).float() + 1
+        # 2. Tính set_sizes (như cũ)
+        is_in_set = cumsum_probs < qhat
+        set_sizes = is_in_set.sum(dim=1).float() + 1
         
-        # Đảm bảo set_size không vượt quá số lượng class thực tế
-        set_sizes = torch.clamp(set_sizes, max=probs.shape[1])
+        # 3. CẢI TIẾN: Tạo scoring liên tục thay vì jitter
+        # Lấy tổng tích lũy ngay trước phần tử cuối cùng lọt vào set
+        # shifted_cumsum giúp lấy giá trị tại (index - 1)
+        shifted_cumsum = torch.cat([torch.zeros(probs.shape[0], 1).to(probs.device), cumsum_probs[:, :-1]], dim=1)
+        prev_cumsum = torch.gather(shifted_cumsum, 1, (set_sizes.long() - 1).unsqueeze(1)).squeeze()
         
-        # 4. Tie-breaking (Quan trọng cho Sampling)
-        # Nếu nhiều mẫu cùng size, mẫu nào có xác suất tại ngưỡng mập mờ hơn sẽ được ưu tiên.
-        # Thêm một chút giá trị từ chính độ lệch xác suất để làm mượt thứ hạng.
-        jitter = cumsum_probs.mean(dim=1) * 1e-6
-        uncertainty_score = set_sizes + jitter
+        # Lấy xác suất của chính phần tử khiến set size nhảy bậc
+        current_prob = torch.gather(sorted_probs, 1, (set_sizes.long() - 1).unsqueeze(1)).squeeze()
         
-        # 5. Chọn các mẫu có kích thước tập dự đoán lớn nhất
+        # Soft Score: Phần dư tỉ lệ thuận với độ mập mờ tại ngưỡng qhat
+        # Càng gần qhat, score càng cao
+        soft_score = (qhat - prev_cumsum) / (current_prob + 1e-9)
+        
+        # Kết hợp: Set size là ưu tiên 1, soft_score là ưu tiên 2 (liên tục)
+        uncertainty_score = set_sizes + soft_score
+        
         _, indices = torch.topk(uncertainty_score, budget)
-        
         return indices
 
 
