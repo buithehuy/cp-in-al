@@ -172,7 +172,7 @@ def main(cfg: DictConfig):
         train_round(
             model=model,
             loader=train_loader,
-            epochs=cfg.trainer.epochs_per_round,
+            epochs=cfg.trainer.init_epochs if round_idx == 0 else cfg.trainer.epochs_per_round,
             lr=cfg.trainer.lr,
             momentum=cfg.trainer.momentum,
             weight_decay=cfg.trainer.weight_decay,
