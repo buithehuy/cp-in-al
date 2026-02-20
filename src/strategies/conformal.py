@@ -304,3 +304,57 @@ class CombinedVShapedSampling(AcquisitionStrategy):
         # Combined score (equal weighting)
         combined_score = 0.5 * entropy_norm + 0.5 * cp_score
         return torch.topk(combined_score, budget)[1]
+
+
+class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
+    """Conformal Boundary Uncertainty (CBU) sampling strategy.
+
+    Measures how close each sample sits to the conformal decision boundary
+    using a soft sigmoid-based uncertainty score:
+
+        U(x) = sum_{y=1}^{C} sigma((q_hat - s(x,y)) / T)
+                             * (1 - sigma((q_hat - s(x,y)) / T))
+
+    where:
+        - s(x, y) = 1 - p_y  (marginal conformal non-conformity score)
+        - q_hat is the marginal conformal threshold (same as cp_size)
+        - sigma is the sigmoid function
+        - T is a temperature parameter (default 0.05)
+
+    The product sigma(...) * (1 - sigma(...)) peaks at 0.25 when the argument
+    is 0, i.e. exactly at the conformal boundary q_hat = s(x, y).
+    Samples with high U(x) have many classes hovering near the boundary,
+    indicating high structural uncertainty from a conformal perspective.
+    """
+
+    def __init__(self, temperature: float = 0.05):
+        super().__init__(name="cp_boundary_uncertainty")
+        self.temperature = temperature
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select K samples with the highest conformal boundary uncertainty.
+
+        Args:
+            probs:  Probability tensor of shape (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   Marginal conformal threshold (scalar or 0-dim tensor)
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        # Non-conformity scores: s(x, y) = 1 - p_y  →  shape (n, C)
+        scores = 1.0 - probs  # higher score ↔ model less confident about y
+
+        # Normalised distance to the conformal boundary
+        # Positive  → score below boundary (class tends to be included in set)
+        # Negative  → score above boundary (class tends to be excluded)
+        z = (qhat - scores) / self.temperature  # shape (n, C)
+
+        # Sigmoid and its complement
+        sig = torch.sigmoid(z)                  # shape (n, C)
+        u_per_class = sig * (1.0 - sig)         # peaks at 0.25 on the boundary
+
+        # Aggregate over classes
+        uncertainty = u_per_class.sum(dim=1)    # shape (n,)
+
+        return torch.topk(uncertainty, budget)[1]

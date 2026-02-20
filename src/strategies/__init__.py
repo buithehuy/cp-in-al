@@ -13,7 +13,8 @@ from .conformal import (
     CPAPSSampling,
     RMCPSampling,
     CombinedSampling,
-    CombinedVShapedSampling
+    CombinedVShapedSampling,
+    ConformalBoundaryUncertaintySampling,
 )
 
 # Strategy registry
@@ -29,6 +30,7 @@ STRATEGIES = {
     "cp_rmcp": RMCPSampling,
     "combined": CombinedSampling,
     "combined_v_shaped": CombinedVShapedSampling,
+    "cp_boundary_uncertainty": ConformalBoundaryUncertaintySampling,
 }
 
 
@@ -62,6 +64,7 @@ __all__ = [
     'RMCPSampling',
     'CombinedSampling',
     'CombinedVShapedSampling',
+    'ConformalBoundaryUncertaintySampling',
     'STRATEGIES',
     'get_strategy',
 ]
