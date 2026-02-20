@@ -824,3 +824,76 @@ class CPRelativeMarginSampling(AcquisitionStrategy):
 
         # Select samples with largest RCS prediction sets
         return torch.topk(set_sizes, budget)[1]
+
+
+class CPRCSMISampling(AcquisitionStrategy):
+    """RCS Set-Partition Mutual Information (RCS-MI) — hybrid novel strategy.
+
+    Motivation: RCS wins early rounds (large relative sets, informative) but
+    degenerates in later rounds when the model is strong — p_max grows, the
+    relative threshold rises, and almost every sample gets set_size=1,
+    making them indistinguishable by set size alone.
+
+    Fix: replace the set-SIZE signal with the set-PARTITION MUTUAL INFORMATION,
+    computed under the RCS partition (not marginal, not APS).
+
+        RCS_MI(x) = H(p) − [P_in_rcs × H(p_in_rcs) + P_out_rcs × H(p_out_rcs)]
+
+    Why this fixes late-round degeneration:
+    - When set_size=1 (one class dominates under RCS), P_in_rcs ≈ p_max.
+      If p_max = 0.7 and p_out is spread over 99 other classes:
+        H_out = entropy over 99 tiny probs ≈ log(99) (high!)
+        MI = H(p) − [0.7 × H_in + 0.3 × H_out]  ← non-zero, discriminative.
+    - Samples where the model is 70% confident but has a "crowded out-set"
+      (many runner-up classes) score HIGHER than samples where the model is
+      90% confident with nothing in the out-set.
+
+    This correctly identifies "I'm pretty sure, but there are many alternatives"
+    — exactly the hard cases that need labeling.
+
+    Uses the RCS partition: `C_rcs(x) = {y : p_y ≥ p_max(x) × (1 − qhat)}`
+    calibrated by `compute_qhat_rcs` on the held-out calibration set.
+    Fully conformal, pure uncertainty (no diversity component).
+    """
+
+    def __init__(self):
+        super().__init__(name="cp_rcs_mi")
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with highest RCS set-partition mutual information.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   RCS threshold from compute_qhat_rcs on calibration set
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        eps = 1e-9
+        n, C = probs.shape
+
+        # ── RCS partition: class y is "in" iff p_y ≥ p_max × (1-qhat) ────────
+        p_max   = probs.max(dim=1, keepdim=True)[0]          # (n, 1)
+        threshold = p_max * (1.0 - qhat)                     # (n, 1)
+        in_rcs  = (probs >= threshold).float()               # (n, C)
+        out_rcs = 1.0 - in_rcs                               # (n, C)
+
+        # ── Total entropy H(p) ───────────────────────────────────────────────
+        H_total = -(probs * torch.log(probs + eps)).sum(dim=1)   # (n,)
+
+        # ── Within-RCS-set distribution ───────────────────────────────────────
+        P_in_raw  = (probs * in_rcs ).sum(dim=1)             # (n,)  raw weight
+        P_out_raw = (probs * out_rcs).sum(dim=1)             # (n,)
+
+        p_in  = probs * in_rcs  / P_in_raw .clamp(min=eps).unsqueeze(1)
+        p_out = probs * out_rcs / P_out_raw.clamp(min=eps).unsqueeze(1)
+
+        H_in  = -(p_in  * torch.log(p_in  + eps) * in_rcs ).sum(dim=1)
+        H_out = -(p_out * torch.log(p_out + eps) * out_rcs).sum(dim=1)
+
+        # ── RCS-MI = H(p) − H(y | RCS membership) ───────────────────────────
+        H_cond = P_in_raw * H_in + P_out_raw * H_out
+        rcs_mi = (H_total - H_cond).clamp(min=0.0)           # (n,)
+
+        return torch.topk(rcs_mi, budget)[1]
