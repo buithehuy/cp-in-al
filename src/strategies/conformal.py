@@ -107,54 +107,100 @@ class CPVShapedEntropySampling(AcquisitionStrategy):
         return torch.topk(score, budget)[1]
 
 
-class CPAPSSampling(AcquisitionStrategy):
-    """Adaptive Prediction Sets (APS) - conformal prediction with cumulative probability.
+# class CPAPSSampling(AcquisitionStrategy):
+#     """Adaptive Prediction Sets (APS) - conformal prediction with cumulative probability.
     
-    APS differs from standard conformal prediction by using an adaptive threshold:
-    - Sort class probabilities in descending order
-    - Include classes cumulatively until sum exceeds 1 - qhat
-    - Produces smaller, more focused prediction sets
-    - Selection prioritizes samples with larger APS sets (more uncertain)
+#     APS differs from standard conformal prediction by using an adaptive threshold:
+#     - Sort class probabilities in descending order
+#     - Include classes cumulatively until sum exceeds 1 - qhat
+#     - Produces smaller, more focused prediction sets
+#     - Selection prioritizes samples with larger APS sets (more uncertain)
+#     """
+    
+#     def __init__(self):
+#         super().__init__(name="cp_aps")
+    
+#     def select(self, probs, budget, qhat, **kwargs):
+#         """Select samples with largest APS prediction set sizes.
+        
+#         Args:
+#             probs: Probability tensor of shape (n_samples, n_classes)
+#             budget: Number of samples to select
+#             qhat: APS conformity score threshold (cumulative probability)
+            
+#         Returns:
+#             Tensor of selected indices
+#         """
+#         # Sort probabilities in descending order for each sample
+#         sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
+        
+#         # Compute cumulative sum of sorted probabilities
+#         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
+        
+#         # For APS, qhat is already a cumulative probability threshold
+#         # Find where cumulative sum first exceeds qhat
+#         threshold = qhat
+        
+#         # For each sample, find the index where cumsum first exceeds threshold
+#         # Add 1 because we need to include that class
+#         set_sizes = torch.zeros(probs.shape[0])
+#         for i in range(probs.shape[0]):
+#             # Find first index where cumsum exceeds threshold
+#             exceeds = (cumsum_probs[i] >= threshold).nonzero(as_tuple=True)[0]
+#             if len(exceeds) > 0:
+#                 set_sizes[i] = exceeds[0].item() + 1  # +1 to include that class
+#             else:
+#                 # If never exceeds threshold, include all classes
+#                 set_sizes[i] = probs.shape[1]
+        
+#         # Select samples with largest set sizes (most uncertain)
+#         return torch.topk(set_sizes, budget)[1]
+
+import torch
+import torch.nn.functional as F
+
+class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
+    """Conformal Boundary Uncertainty (CBU) - APS Version.
+    
+    This strategy measures how many classes in each sample are 'uncertain' 
+    relative to the APS threshold (qhat). It uses the variance of the 
+    soft-inclusion Bernoulli distribution:
+    
+        U(x) = sum_{y} sigma(z) * (1 - sigma(z))
+        where z = (qhat - cumsum_probs) / T
     """
     
-    def __init__(self):
-        super().__init__(name="cp_aps")
+    def __init__(self, temperature: float = 0.05):
+        super().__init__(name="cp_boundary")
+        self.temperature = temperature
     
     def select(self, probs, budget, qhat, **kwargs):
-        """Select samples with largest APS prediction set sizes.
+        """Select samples with highest uncertainty at the APS boundary.
         
         Args:
-            probs: Probability tensor of shape (n_samples, n_classes)
-            budget: Number of samples to select
-            qhat: APS conformity score threshold (cumulative probability)
-            
-        Returns:
-            Tensor of selected indices
+            probs: Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat: Marginal APS threshold from calibration
         """
-        # Sort probabilities in descending order for each sample
+        # 1. Tính APS Score (Cumulative Sum) - Vectorized
         sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
-        
-        # Compute cumulative sum of sorted probabilities
         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
         
-        # For APS, qhat is already a cumulative probability threshold
-        # Find where cumulative sum first exceeds qhat
-        threshold = qhat
+        # 2. Tính khoảng cách mềm đến biên qhat
+        # z > 0: lớp nằm trong tập dự đoán
+        # z < 0: lớp nằm ngoài tập dự đoán
+        z = (qhat - cumsum_probs) / self.temperature
         
-        # For each sample, find the index where cumsum first exceeds threshold
-        # Add 1 because we need to include that class
-        set_sizes = torch.zeros(probs.shape[0])
-        for i in range(probs.shape[0]):
-            # Find first index where cumsum exceeds threshold
-            exceeds = (cumsum_probs[i] >= threshold).nonzero(as_tuple=True)[0]
-            if len(exceeds) > 0:
-                set_sizes[i] = exceeds[0].item() + 1  # +1 to include that class
-            else:
-                # If never exceeds threshold, include all classes
-                set_sizes[i] = probs.shape[1]
+        # 3. Tính Conformal Boundary Uncertainty (CBU)
+        # sigma * (1 - sigma) đạt cực đại tại z = 0 (tức là cumsum_probs = qhat)
+        sig = torch.sigmoid(z)
+        u_per_class = sig * (1.0 - sig)
         
-        # Select samples with largest set sizes (most uncertain)
-        return torch.topk(set_sizes, budget)[1]
+        # 4. Aggregate: Mẫu nào có nhiều lớp 'mấp mé' biên APS nhất sẽ có score cao nhất
+        uncertainty = u_per_class.sum(dim=1)
+        
+        # Trả về top K mẫu có Uncertainty cao nhất
+        return torch.topk(uncertainty, budget)[1]
 
 # import torch
 
@@ -306,65 +352,65 @@ class CombinedVShapedSampling(AcquisitionStrategy):
         return torch.topk(combined_score, budget)[1]
 
 
-class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
-    """Conformal Boundary Uncertainty (CBU) sampling strategy.
+# class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
+#     """Conformal Boundary Uncertainty (CBU) sampling strategy.
 
-    Measures how close each sample sits to the conformal decision boundary
-    using a soft sigmoid-based uncertainty score:
+#     Measures how close each sample sits to the conformal decision boundary
+#     using a soft sigmoid-based uncertainty score:
 
-        U(x) = sum_{y=1}^{C} sigma((q_hat - s(x,y)) / T_eff)
-                             * (1 - sigma((q_hat - s(x,y)) / T_eff))
+#         U(x) = sum_{y=1}^{C} sigma((q_hat - s(x,y)) / T_eff)
+#                              * (1 - sigma((q_hat - s(x,y)) / T_eff))
 
-    where:
-        - s(x, y) = 1 - p_y  (marginal conformal non-conformity score)
-        - q_hat is the marginal conformal threshold (same as cp_size)
-        - sigma is the sigmoid function
-        - T_eff = std(q_hat - s) * T_scale  (adaptive temperature)
+#     where:
+#         - s(x, y) = 1 - p_y  (marginal conformal non-conformity score)
+#         - q_hat is the marginal conformal threshold (same as cp_size)
+#         - sigma is the sigmoid function
+#         - T_eff = std(q_hat - s) * T_scale  (adaptive temperature)
 
-    T_eff được tính **adaptive** từ std của toàn bộ tập unlabeled để tránh
-    sigmoid bão hòa (T_scale mặc định = 1.0, tăng → selection mượt hơn,
-    giảm → chỉ chọn sample cực kỳ sát biên).
+#     T_eff được tính **adaptive** từ std của toàn bộ tập unlabeled để tránh
+#     sigmoid bão hòa (T_scale mặc định = 1.0, tăng → selection mượt hơn,
+#     giảm → chỉ chọn sample cực kỳ sát biên).
 
-    The product sigma(...) * (1 - sigma(...)) peaks at 0.25 when the argument
-    is 0, i.e. exactly at the conformal boundary q_hat = s(x, y).
-    Samples with high U(x) have many classes hovering near the boundary,
-    indicating high structural uncertainty from a conformal perspective.
-    """
+#     The product sigma(...) * (1 - sigma(...)) peaks at 0.25 when the argument
+#     is 0, i.e. exactly at the conformal boundary q_hat = s(x, y).
+#     Samples with high U(x) have many classes hovering near the boundary,
+#     indicating high structural uncertainty from a conformal perspective.
+#     """
 
-    def __init__(self, T_scale: float = 1.0):
-        super().__init__(name="cp_boundary_uncertainty")
-        self.T_scale = T_scale
+#     def __init__(self, T_scale: float = 1.0):
+#         super().__init__(name="cp_boundary_uncertainty")
+#         self.T_scale = T_scale
 
-    def select(self, probs, budget, qhat, **kwargs):
-        """Select K samples with the highest conformal boundary uncertainty.
+#     def select(self, probs, budget, qhat, **kwargs):
+#         """Select K samples with the highest conformal boundary uncertainty.
 
-        Args:
-            probs:   Probability tensor of shape (n_samples, n_classes)
-            budget:  Number of samples to select (K)
-            qhat:    Marginal conformal threshold (scalar or 0-dim tensor)
+#         Args:
+#             probs:   Probability tensor of shape (n_samples, n_classes)
+#             budget:  Number of samples to select (K)
+#             qhat:    Marginal conformal threshold (scalar or 0-dim tensor)
 
-        Returns:
-            Tensor of selected indices (shape: [budget])
-        """
-        # Non-conformity scores: s(x, y) = 1 - p_y  →  shape (n, C)
-        scores = 1.0 - probs  # higher score ↔ model less confident about y
+#         Returns:
+#             Tensor of selected indices (shape: [budget])
+#         """
+#         # Non-conformity scores: s(x, y) = 1 - p_y  →  shape (n, C)
+#         scores = 1.0 - probs  # higher score ↔ model less confident about y
 
-        # Distance của mỗi (sample, class) tới biên conformal
-        dist = qhat - scores   # shape (n, C)
-        # dist > 0 → class này nằm trong prediction set
-        # dist < 0 → class này nằm ngoài prediction set
-        # dist = 0 → đúng trên biên → đóng góp cao nhất vào U(x)
+#         # Distance của mỗi (sample, class) tới biên conformal
+#         dist = qhat - scores   # shape (n, C)
+#         # dist > 0 → class này nằm trong prediction set
+#         # dist < 0 → class này nằm ngoài prediction set
+#         # dist = 0 → đúng trên biên → đóng góp cao nhất vào U(x)
 
-        # Adaptive temperature: scale theo std toàn bộ distances
-        # Tránh sigmoid bão hòa khi dist có dải rộng hơn T tĩnh nhiều lần
-        T_eff = dist.std().clamp(min=1e-6) * self.T_scale
-        z = dist / T_eff       # shape (n, C), chuẩn hóa về dải hợp lý
+#         # Adaptive temperature: scale theo std toàn bộ distances
+#         # Tránh sigmoid bão hòa khi dist có dải rộng hơn T tĩnh nhiều lần
+#         T_eff = dist.std().clamp(min=1e-6) * self.T_scale
+#         z = dist / T_eff       # shape (n, C), chuẩn hóa về dải hợp lý
 
-        # Sigmoid uncertainty: đạt max 0.25 khi z=0 (đúng trên biên)
-        sig = torch.sigmoid(z)            # shape (n, C)
-        u_per_class = sig * (1.0 - sig)  # shape (n, C)
+#         # Sigmoid uncertainty: đạt max 0.25 khi z=0 (đúng trên biên)
+#         sig = torch.sigmoid(z)            # shape (n, C)
+#         u_per_class = sig * (1.0 - sig)  # shape (n, C)
 
-        # Aggregate over classes → tổng uncertainty của sample
-        uncertainty = u_per_class.sum(dim=1)   # shape (n,)
+#         # Aggregate over classes → tổng uncertainty của sample
+#         uncertainty = u_per_class.sum(dim=1)   # shape (n,)
 
-        return torch.topk(uncertainty, budget)[1]
+#         return torch.topk(uncertainty, budget)[1]
