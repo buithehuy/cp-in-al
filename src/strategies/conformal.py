@@ -202,6 +202,90 @@ class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
         # Trả về top K mẫu có Uncertainty cao nhất
         return torch.topk(uncertainty, budget)[1]
 
+class CPSetPartitionMISampling(AcquisitionStrategy):
+    """Conformal Set-Partition Mutual Information (CSPMI) — novel strategy.
+
+    The conformal prediction set C(x) = {y : 1 - p_y <= qhat} partitions the
+    label space into two groups: "plausible" classes (inside the set) and
+    "rejected" classes (outside). This partition carries *information* about
+    the true label y under the model's current belief p(y|x).
+
+    CSPMI measures exactly that information gain — the mutual information
+    between the label y and the binary conformal-membership indicator I[y∈C(x)]:
+
+        CSPMI(x) = I(y ; I[y ∈ C(x)])
+                 = H(p) - [P_in × H(p_in) + P_out × H(p_out)]
+
+    where:
+        P_in   = Σ_{y∈C} p_y          (total prob mass inside the set)
+        p_in   = renormalized p over classes inside  the set
+        p_out  = renormalized p over classes outside the set
+
+    --- Why this beats entropy ---
+
+    | Scenario                              | H(p) | CSPMI |
+    |---------------------------------------|------|-------|
+    | True decision boundary (2 classes)    | High | High  |  ← want this
+    | Noisy/OOD  (set = all C classes)      | Max  | ~0    |  ← entropy fails
+    | Overconfident-wrong (set is empty)    | Low  | High  |  ← entropy fails
+
+    Key property: when C(x) = all classes (pure noise), P_in → 1,
+    H(p_in) → H(p), so CSPMI → 0. Entropy would give H_max here.
+
+    Fully conformal: qhat computed via marginal compute_qhat on calib set.
+    """
+
+    def __init__(self):
+        super().__init__(name="cp_spm_info")
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with highest conformal set-partition mutual information.
+
+        Args:
+            probs:  Probability tensor of shape (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   Marginal conformal threshold from calibration
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        eps = 1e-9
+        n, C = probs.shape
+
+        # ── Conformal set membership: class y is "in" iff p_y >= 1 - qhat ──
+        in_set  = (probs >= (1.0 - qhat)).float()   # (n, C)  {0, 1}
+        out_set = 1.0 - in_set                       # (n, C)  {0, 1}
+
+        # ── Total entropy H(p) ───────────────────────────────────────────────
+        H_total = -(probs * torch.log(probs + eps)).sum(dim=1)   # (n,)
+
+        # ── Within-set distribution and entropy ──────────────────────────────
+        # P_in: total probability mass inside the conformal set
+        P_in = (probs * in_set).sum(dim=1).clamp(min=eps)         # (n,)
+
+        # p_in: renormalized distribution inside the set
+        p_in  = probs * in_set / P_in.unsqueeze(1)                # (n, C)
+        H_in  = -(p_in  * torch.log(p_in  + eps) * in_set ).sum(dim=1)  # (n,)
+
+        # ── Out-of-set distribution and entropy ──────────────────────────────
+        P_out = (probs * out_set).sum(dim=1).clamp(min=eps)       # (n,)
+
+        p_out = probs * out_set / P_out.unsqueeze(1)              # (n, C)
+        H_out = -(p_out * torch.log(p_out + eps) * out_set).sum(dim=1)  # (n,)
+
+        # ── Conditional entropy H(y | set membership) ────────────────────────
+        # P_in_raw and P_out_raw WITHOUT clamping, for correct weighting
+        P_in_raw  = (probs * in_set ).sum(dim=1)   # (n,)  may be 0
+        P_out_raw = (probs * out_set).sum(dim=1)   # (n,)  may be 0
+
+        H_conditional = P_in_raw * H_in + P_out_raw * H_out      # (n,)
+
+        # ── CSPMI = total entropy - conditional entropy ───────────────────────
+        mutual_info = (H_total - H_conditional).clamp(min=0.0)    # (n,)
+
+        return torch.topk(mutual_info, budget)[1]
+
+
 # import torch
 
 # class CPAPSSampling(AcquisitionStrategy):
