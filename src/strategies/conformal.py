@@ -897,3 +897,73 @@ class CPRCSMISampling(AcquisitionStrategy):
         rcs_mi = (H_total - H_cond).clamp(min=0.0)           # (n,)
 
         return torch.topk(rcs_mi, budget)[1]
+
+
+class CPRCSv2Sampling(AcquisitionStrategy):
+    """RCS v2 — Continuous Relative Conformity Score sampling.
+
+    Problem with original RCS: acquisition signal = set_size (integer)
+    → many ties, no discrimination when most samples have set_size=1 in late rounds.
+
+    Fix: instead of COUNTING classes above the RCS threshold, use a
+    CONTINUOUS score directly derived from the RCS non-conformity measure.
+
+    Score: competitive_ratio(x) = p_(2)(x) / p_max(x)
+
+    This is 1 − s_rcs(x, y_(2)), the "inverse RCS score" of the runner-up class.
+
+    Interpretation:
+        competitive_ratio → 1  : runner-up tightly competes with top class
+                                → model genuinely uncertain → SELECT ✓
+        competitive_ratio → 0  : top class dominates far beyond runner-up
+                                → model confident → don't select ✓
+
+    Why this doesn't degenerate in late rounds:
+        competitive_ratio = p_(2)/p_max is a RATIO — it's invariant to the
+        absolute level of p_max. Even when all samples have p_max = 0.9
+        (strong model), competitive_ratio varies freely in [0, 1]:
+            p=[0.90, 0.09, ...]  → ratio = 0.10  (clear winner)
+            p=[0.90, 0.80, ...]  → ratio = 0.89  (genuine boundary)
+
+    Extension: to use ALL competing classes (not just runner-up):
+        weighted_ratio(x) = Σ_{y≠top} p_y × (p_y/p_max)
+                          = (||p||² − p_max²) / p_max
+
+    By default uses the runner-up score (mode='top2') but also supports
+    the full weighted version (mode='weighted').
+
+    Fully conformal: uses qhat from compute_qhat_rcs on calibration set.
+    Pure uncertainty: no diversity component.
+    """
+
+    def __init__(self, mode: str = 'top2'):
+        super().__init__(name="cp_rcs_v2")
+        assert mode in ('top2', 'weighted'), "mode must be 'top2' or 'weighted'"
+        self.mode = mode
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with highest continuous RCS uncertainty.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   RCS threshold from compute_qhat_rcs (informational)
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        n, C = probs.shape
+        p_max = probs.max(dim=1)[0]                           # (n,)
+
+        if self.mode == 'top2':
+            # Score = p_(2) / p_max  (runner-up competitive ratio)
+            sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
+            p_second = sorted_probs[:, 1]                     # (n,)
+            score = p_second / (p_max + 1e-9)                 # (n,) ∈ [0, 1)
+
+        else:  # weighted
+            # Score = (||p||² − p_max²) / p_max  (all runner-ups weighted)
+            gini_others = (probs ** 2).sum(dim=1) - p_max ** 2  # (n,)
+            score = gini_others / (p_max + 1e-9)              # (n,)
+
+        return torch.topk(score, budget)[1]

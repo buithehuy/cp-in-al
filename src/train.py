@@ -144,7 +144,7 @@ def main(cfg: DictConfig):
         elif cfg.strategy.name == 'cp_rmcp':
             qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_rmcp(model, test_loader, qhat, device)
-        elif cfg.strategy.name in ('cp_rel_margin', 'cp_rcs_mi'):
+        elif cfg.strategy.name in ('cp_rel_margin', 'cp_rcs_mi', 'cp_rcs_v2'):
             qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_rcs(model, test_loader, qhat, device)
         else:
@@ -193,7 +193,7 @@ def main(cfg: DictConfig):
                 qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
             elif cfg.strategy.name == 'cp_rmcp':
                 qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
-            elif cfg.strategy.name in ('cp_rel_margin', 'cp_rcs_mi'):
+            elif cfg.strategy.name in ('cp_rel_margin', 'cp_rcs_mi', 'cp_rcs_v2'):
                 qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
             else:
                 qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
