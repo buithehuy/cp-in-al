@@ -286,6 +286,88 @@ class CPSetPartitionMISampling(AcquisitionStrategy):
         return torch.topk(mutual_info, budget)[1]
 
 
+class CPAPSSPMISampling(AcquisitionStrategy):
+    """APS-based Set-Partition Mutual Information (APS-SPMI) — novel strategy.
+
+    Same information-theoretic principle as CSPMI, but uses the APS
+    (Adaptive Prediction Sets) cumulative partition instead of the marginal
+    binary threshold.
+
+    APS partition: class at sorted rank r is "in" the set if the cumulative
+    probability BEFORE including it hasn't yet crossed qhat:
+        in_aps(y_r) = 1  iff  cumsum_{r-1} < qhat
+
+    Why APS partition beats marginal partition for CSPMI:
+    - APS sets are smaller and rank-ordered → finer, more informative split
+    - On CIFAR-100 (high C), marginal CSPMI collapses when P_in ≈ 1
+      (large qhat puts most prob mass inside set → MI ≈ 0).
+      APS naturally produces smaller sets, preventing this collapse.
+    - APS respects the ORDERING of classes — only the most probable classes
+      are included, making the in/out partition semantically meaningful.
+
+    Score:
+        APS_SPMI(x) = H(p) - [P_in × H(p_in) + P_out × H(p_out)]
+
+    where in/out is determined by the APS cumulative partition.
+
+    Fully conformal: qhat is computed via compute_qhat_aps on calibration set.
+    """
+
+    def __init__(self):
+        super().__init__(name="cp_aps_spm")
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with highest APS conformal set-partition MI.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   APS threshold from compute_qhat_aps on calibration set
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        eps = 1e-9
+        n, C = probs.shape
+
+        # ── APS partition: class at rank r is "in" if cumsum[r-1] < qhat ────
+        sorted_probs, sort_idx = torch.sort(probs, dim=1, descending=True)
+        cumsum = torch.cumsum(sorted_probs, dim=1)                    # (n, C)
+
+        # prev_cumsum[r] = cumsum before including rank r
+        prev_cumsum = torch.cat(
+            [torch.zeros(n, 1, device=probs.device), cumsum[:, :-1]], dim=1
+        )                                                             # (n, C)
+
+        # A class at sorted rank r is in the APS set iff we haven't yet
+        # accumulated enough probability to cross qhat before it
+        in_aps_sorted = (prev_cumsum < qhat).float()                  # (n, C)
+
+        # Scatter back to original class order
+        in_aps = torch.zeros_like(probs)
+        in_aps.scatter_(1, sort_idx, in_aps_sorted)                   # (n, C)
+        out_aps = 1.0 - in_aps
+
+        # ── Total entropy H(p) ───────────────────────────────────────────────
+        H_total = -(probs * torch.log(probs + eps)).sum(dim=1)        # (n,)
+
+        # ── Within-set: renormalized distribution over APS-included classes ──
+        P_in_raw  = (probs * in_aps ).sum(dim=1)                      # (n,)
+        P_out_raw = (probs * out_aps).sum(dim=1)                      # (n,)
+
+        p_in  = probs * in_aps  / P_in_raw .clamp(min=eps).unsqueeze(1)
+        p_out = probs * out_aps / P_out_raw.clamp(min=eps).unsqueeze(1)
+
+        H_in  = -(p_in  * torch.log(p_in  + eps) * in_aps ).sum(dim=1)
+        H_out = -(p_out * torch.log(p_out + eps) * out_aps).sum(dim=1)
+
+        # ── APS-SPMI = H(p) - H(y | APS membership) ─────────────────────────
+        H_conditional = P_in_raw * H_in + P_out_raw * H_out
+        mi = (H_total - H_conditional).clamp(min=0.0)                # (n,)
+
+        return torch.topk(mi, budget)[1]
+
+
 class CPDiversityAPSSampling(AcquisitionStrategy):
     """Conformal Diversity-Uncertainty Sampling (CDUS) — novel strategy.
 

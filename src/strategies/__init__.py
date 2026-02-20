@@ -17,6 +17,7 @@ from .conformal import (
     ConformalBoundaryUncertaintySampling,
     CPSetPartitionMISampling,
     CPDiversityAPSSampling,
+    CPAPSSPMISampling,
 )
 
 # Strategy registry
@@ -35,6 +36,7 @@ STRATEGIES = {
     "cp_boundary_uncertainty": ConformalBoundaryUncertaintySampling,
     "cp_spm_info": CPSetPartitionMISampling,
     "cp_diversity": CPDiversityAPSSampling,
+    "cp_aps_spm": CPAPSSPMISampling,
 }
 
 
@@ -71,6 +73,7 @@ __all__ = [
     'ConformalBoundaryUncertaintySampling',
     'CPSetPartitionMISampling',
     'CPDiversityAPSSampling',
+    'CPAPSSPMISampling',
     'STRATEGIES',
     'get_strategy',
 ]
