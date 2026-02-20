@@ -312,14 +312,18 @@ class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
     Measures how close each sample sits to the conformal decision boundary
     using a soft sigmoid-based uncertainty score:
 
-        U(x) = sum_{y=1}^{C} sigma((q_hat - s(x,y)) / T)
-                             * (1 - sigma((q_hat - s(x,y)) / T))
+        U(x) = sum_{y=1}^{C} sigma((q_hat - s(x,y)) / T_eff)
+                             * (1 - sigma((q_hat - s(x,y)) / T_eff))
 
     where:
         - s(x, y) = 1 - p_y  (marginal conformal non-conformity score)
         - q_hat is the marginal conformal threshold (same as cp_size)
         - sigma is the sigmoid function
-        - T is a temperature parameter (default 0.05)
+        - T_eff = std(q_hat - s) * T_scale  (adaptive temperature)
+
+    T_eff được tính **adaptive** từ std của toàn bộ tập unlabeled để tránh
+    sigmoid bão hòa (T_scale mặc định = 1.0, tăng → selection mượt hơn,
+    giảm → chỉ chọn sample cực kỳ sát biên).
 
     The product sigma(...) * (1 - sigma(...)) peaks at 0.25 when the argument
     is 0, i.e. exactly at the conformal boundary q_hat = s(x, y).
@@ -327,17 +331,17 @@ class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
     indicating high structural uncertainty from a conformal perspective.
     """
 
-    def __init__(self, temperature: float = 0.05):
+    def __init__(self, T_scale: float = 1.0):
         super().__init__(name="cp_boundary_uncertainty")
-        self.temperature = temperature
+        self.T_scale = T_scale
 
     def select(self, probs, budget, qhat, **kwargs):
         """Select K samples with the highest conformal boundary uncertainty.
 
         Args:
-            probs:  Probability tensor of shape (n_samples, n_classes)
-            budget: Number of samples to select (K)
-            qhat:   Marginal conformal threshold (scalar or 0-dim tensor)
+            probs:   Probability tensor of shape (n_samples, n_classes)
+            budget:  Number of samples to select (K)
+            qhat:    Marginal conformal threshold (scalar or 0-dim tensor)
 
         Returns:
             Tensor of selected indices (shape: [budget])
@@ -345,16 +349,22 @@ class ConformalBoundaryUncertaintySampling(AcquisitionStrategy):
         # Non-conformity scores: s(x, y) = 1 - p_y  →  shape (n, C)
         scores = 1.0 - probs  # higher score ↔ model less confident about y
 
-        # Normalised distance to the conformal boundary
-        # Positive  → score below boundary (class tends to be included in set)
-        # Negative  → score above boundary (class tends to be excluded)
-        z = (qhat - scores) / self.temperature  # shape (n, C)
+        # Distance của mỗi (sample, class) tới biên conformal
+        dist = qhat - scores   # shape (n, C)
+        # dist > 0 → class này nằm trong prediction set
+        # dist < 0 → class này nằm ngoài prediction set
+        # dist = 0 → đúng trên biên → đóng góp cao nhất vào U(x)
 
-        # Sigmoid and its complement
-        sig = torch.sigmoid(z)                  # shape (n, C)
-        u_per_class = sig * (1.0 - sig)         # peaks at 0.25 on the boundary
+        # Adaptive temperature: scale theo std toàn bộ distances
+        # Tránh sigmoid bão hòa khi dist có dải rộng hơn T tĩnh nhiều lần
+        T_eff = dist.std().clamp(min=1e-6) * self.T_scale
+        z = dist / T_eff       # shape (n, C), chuẩn hóa về dải hợp lý
 
-        # Aggregate over classes
-        uncertainty = u_per_class.sum(dim=1)    # shape (n,)
+        # Sigmoid uncertainty: đạt max 0.25 khi z=0 (đúng trên biên)
+        sig = torch.sigmoid(z)            # shape (n, C)
+        u_per_class = sig * (1.0 - sig)  # shape (n, C)
+
+        # Aggregate over classes → tổng uncertainty của sample
+        uncertainty = u_per_class.sum(dim=1)   # shape (n,)
 
         return torch.topk(uncertainty, budget)[1]
