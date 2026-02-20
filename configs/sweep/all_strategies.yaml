@@ -5,4 +5,4 @@ defaults:
 hydra:
   sweeper:
     params:
-      strategy: random,entropy,least_confidence,margin,cp_size,cp_v_shaped,cp_v_shaped_entropy,combined,combined_v_shaped
+      strategy: random,entropy,least_confidence,margin,cp_size,cp_v_shaped,cp_v_shaped_entropy,combined,combined_v_shaped,cp_boundary_uncertainty
