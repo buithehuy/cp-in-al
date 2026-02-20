@@ -276,3 +276,69 @@ def evaluate_rmcp(model, loader, qhat, device='cuda'):
     }
 
 
+def compute_qhat_rcs(model, loader, alpha=0.1, device='cuda'):
+    """Compute Relative Conformity Score (RCS) threshold qhat.
+
+    NOVEL Non-Conformity Score:
+        s_rcs(x, y) = 1 - p_y / p_max(x)   in [0, 1]
+
+    Unlike marginal (absolute) or APS (cumulative rank), RCS is a *relative*
+    score measuring how far each class sits from the top prediction, as a
+    fraction of the top prediction itself.
+
+    Prediction set:
+        C_rcs(x) = {y : p_y >= p_max(x) * (1 - qhat)}
+
+    = all classes whose probability is at least (1-qhat) of the maximum.
+    The threshold adapts PER SAMPLE: confident samples get a tight relative
+    neighbourhood; uncertain samples automatically include more competitors.
+
+    Args:
+        model:  Trained model
+        loader: Calibration DataLoader
+        alpha:  Miscoverage level (e.g. 0.1 for 90% coverage)
+        device: Device
+
+    Returns:
+        qhat: RCS threshold in (0, 1)
+    """
+    probs, labels = get_probs(model, loader, device)
+    p_max  = probs.max(dim=1)[0]                              # (n,)
+    p_true = probs[torch.arange(len(labels)), labels]         # (n,)
+
+    # s_rcs for the true label: 0 when model tops y*, ~1 when model is wrong
+    scores = 1.0 - p_true / (p_max + 1e-9)                   # (n,) in [0,1)
+
+    n = len(labels)
+    k = int(np.ceil((n + 1) * (1 - alpha)))
+    k = min(k - 1, n - 1)
+
+    qhat = torch.sort(scores)[0][k].item()
+    return qhat
+
+
+def evaluate_rcs(model, loader, qhat, device='cuda'):
+    """Evaluate Relative Conformity Score (RCS) prediction sets.
+
+    C_rcs(x) = {y : p_y >= p_max(x) * (1 - qhat)}
+
+    Args:
+        model:  Trained model
+        loader: Test DataLoader
+        qhat:   RCS threshold from compute_qhat_rcs
+        device: Device
+
+    Returns:
+        dict with coverage, avg_set_size, zero_sets
+    """
+    probs, labels = get_probs(model, loader, device)
+    p_max = probs.max(dim=1, keepdim=True)[0]                 # (n, 1)
+
+    threshold = p_max * (1.0 - qhat)                          # (n, 1) per-sample
+    pred_sets = (probs >= threshold)                           # (n, C)
+
+    coverage     = pred_sets[torch.arange(len(labels)), labels].float().mean().item()
+    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
+    zero_sets    = (pred_sets.sum(dim=1) == 0).sum().item()
+
+    return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets}

@@ -23,6 +23,8 @@ from utils import (
     evaluate_aps,
     compute_qhat_rmcp,
     evaluate_rmcp,
+    compute_qhat_rcs,
+    evaluate_rcs,
     get_probs,
     train_round,
     eval_acc
@@ -136,12 +138,15 @@ def main(cfg: DictConfig):
         acc = eval_acc(model, test_loader, device)
         
         # Use strategy-specific methods
-        if cfg.strategy.name in ('cp_aps', 'cp_boundary_uncertainty', 'cp_diversity', 'cp_aps_spm'):
+        if cfg.strategy.name in ('cp_aps', 'cp_boundary_uncertainty', 'cp_diversity', 'cp_aps_spm', 'cp_wise'):
             qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_aps(model, test_loader, qhat, device)
         elif cfg.strategy.name == 'cp_rmcp':
             qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_rmcp(model, test_loader, qhat, device)
+        elif cfg.strategy.name == 'cp_rel_margin':
+            qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
+            cp_metrics = evaluate_rcs(model, test_loader, qhat, device)
         else:
             qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_conformal_prediction(model, test_loader, qhat, device)
@@ -188,6 +193,8 @@ def main(cfg: DictConfig):
                 qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
             elif cfg.strategy.name == 'cp_rmcp':
                 qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
+            elif cfg.strategy.name == 'cp_rel_margin':
+                qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
             else:
                 qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             

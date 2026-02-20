@@ -757,3 +757,70 @@ class CombinedVShapedSampling(AcquisitionStrategy):
 #         uncertainty = u_per_class.sum(dim=1)   # shape (n,)
 
 #         return torch.topk(uncertainty, budget)[1]
+
+
+class CPRelativeMarginSampling(AcquisitionStrategy):
+    """Relative Conformity Score (RCS) Sampling — novel conformal method.
+
+    COMPLETELY NEW non-conformity score (not marginal, not APS, not RMCP):
+
+        s_rcs(x, y) = 1 − p_y / p_max(x)   ∈ [0, 1]
+
+    Prediction set:
+        C_rcs(x) = {y : p_y ≥ p_max(x) × (1 − qhat)}
+
+    — a *relative epsilon-ball* around the top prediction, where the
+    threshold ADAPTS per sample (scales with p_max).
+
+    ---
+    Key difference from all existing methods:
+
+    | Method   | Conformity score             | Threshold for inclusion  |
+    |----------|------------------------------|--------------------------|
+    | Marginal | 1 − p_y                      | fixed: p_y ≥ 1−qhat      |
+    | APS      | cumsum up to rank of y       | cumulative rank          |
+    | RMCP     | p_y − mean(p_{j≠y})         | absolute margin          |
+    | **RCS**  | **1 − p_y / p_max (ratio)**  | **relative: p_y/p_max ≥ 1−qhat** |
+
+    Why RCS beats marginal for AL:
+    - A sample with p = [0.30, 0.28, 0.26, ...] has tiny margin.
+      Marginal might include only 1–2 classes (if 1−qhat = 0.25).
+      RCS includes all classes within 1−qhat of the max → LARGER set → selected.
+    - A sample with p = [0.90, 0.05, ...] is confident.
+      Marginal: 1 class. RCS: still 1 class (0.05 << 0.90×(1−qhat)).
+    - Uniformly confused (0.01 each): marginal often includes many classes.
+      RCS includes ALL classes (all equal to max) → qhat captures this
+      difficulty correctly and still produces a large set, but the key
+      advantage is in the CALIBRATION: qhat_rcs is smaller for well-
+      calibrated models, making it more discriminative.
+
+    Pure uncertainty: each sample scored independently.
+    Fully conformal: qhat via compute_qhat_rcs on calibration set.
+    """
+
+    def __init__(self):
+        super().__init__(name="cp_rel_margin")
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with largest RCS prediction sets.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   RCS threshold from compute_qhat_rcs on calibration set
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        n, C = probs.shape
+
+        # Per-sample relative threshold: p_max × (1 − qhat)
+        p_max = probs.max(dim=1, keepdim=True)[0]            # (n, 1)
+        threshold = p_max * (1.0 - qhat)                     # (n, 1)
+
+        # RCS prediction set: classes whose probability ≥ relative threshold
+        in_set   = (probs >= threshold).float()              # (n, C)
+        set_sizes = in_set.sum(dim=1)                        # (n,)
+
+        # Select samples with largest RCS prediction sets
+        return torch.topk(set_sizes, budget)[1]

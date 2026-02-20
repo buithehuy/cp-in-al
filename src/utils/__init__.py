@@ -6,7 +6,9 @@ from .conformal_prediction import (
     compute_qhat_aps,
     evaluate_aps,
     compute_qhat_rmcp,
-    evaluate_rmcp
+    evaluate_rmcp,
+    compute_qhat_rcs,
+    evaluate_rcs,
 )
 from .training import train_round, eval_acc
 from .visualization import (
@@ -31,6 +33,8 @@ __all__ = [
     'evaluate_aps',
     'compute_qhat_rmcp',
     'evaluate_rmcp',
+    'compute_qhat_rcs',
+    'evaluate_rcs',
     'train_round',
     'eval_acc',
     'plot_accuracy_vs_samples',
