@@ -368,6 +368,87 @@ class CPAPSSPMISampling(AcquisitionStrategy):
         return torch.topk(mi, budget)[1]
 
 
+class CPWiseSampling(AcquisitionStrategy):
+    """Conformal Within-Set Information Efficiency (WISE) — novel pure-uncertainty strategy.
+
+    Core insight: measuring *how much* information per included class is in the
+    APS conformal set separates genuine ambiguity from noise.
+
+        WISE(x) = H(p_in_aps | x) / |C_APS(x)|
+
+    where:
+        p_in_aps : probability distribution renormalized over the APS set
+        |C_APS|  : APS set size (number of included classes)
+        H(p_in)  : Shannon entropy within the APS set
+
+    ---
+    Why this beats entropy on high-C / noisy datasets:
+
+    Score = H_in / k   ∝   log(k) / k   for uniform within-set distribution,
+    which is maximised at k ≈ e ≈ 2.7 and DECREASES thereafter.
+
+    | Sample type            | APS size k | WISE score (uniform case) |
+    |------------------------|------------|--------------------------|
+    | Confident (singleton)  | 1          | 0.000  ← not selected ✓  |
+    | Decision boundary      | 2–3        | 0.347 – 0.366  ← TOP ✓  |
+    | Confused (10 classes)  | 10         | 0.230            ✓       |
+    | Noisy OOD (80 classes) | 80         | 0.055            ← LOW ✓ |
+
+    Entropy would rank the noisy OOD sample HIGHEST.
+    WISE ranks true boundary samples first.
+
+    Pure uncertainty: each sample scored independently.
+    Fully conformal: uses APS qhat from compute_qhat_aps on calibration set.
+    """
+
+    def __init__(self):
+        super().__init__(name="cp_wise")
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples maximising within-set entropy per APS-included class.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   APS threshold from compute_qhat_aps on calibration set
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        eps = 1e-9
+        n, C = probs.shape
+
+        # ── APS partition (vectorized) ────────────────────────────────────────
+        sorted_probs, sort_idx = torch.sort(probs, dim=1, descending=True)
+        cumsum = torch.cumsum(sorted_probs, dim=1)              # (n, C)
+
+        # Class at sorted rank r is "in" APS set iff cumsum before it < qhat
+        prev_cumsum = torch.cat(
+            [torch.zeros(n, 1, device=probs.device), cumsum[:, :-1]], dim=1
+        )                                                       # (n, C)
+        in_aps_sorted = (prev_cumsum < qhat).float()           # (n, C)
+
+        # Scatter back to original class order
+        in_aps = torch.zeros_like(probs)
+        in_aps.scatter_(1, sort_idx, in_aps_sorted)            # (n, C)
+
+        # ── APS set sizes ─────────────────────────────────────────────────────
+        aps_sizes = in_aps.sum(dim=1).clamp(min=1.0)           # (n,)  ≥ 1
+
+        # ── Within-set entropy H(p_in) ────────────────────────────────────────
+        P_in  = (probs * in_aps).sum(dim=1).clamp(min=eps)     # (n,)
+        p_in  = probs * in_aps / P_in.unsqueeze(1)             # (n, C) renorm
+        H_in  = -(p_in * torch.log(p_in + eps) * in_aps).sum(dim=1)  # (n,)
+
+        # ── WISE = H_in / set_size ────────────────────────────────────────────
+        # Equivalent to average per-class information in the conformal set.
+        # Peaks at APS size ≈ e ≈ 2.7 (for uniform within-set distribution),
+        # naturally penalising both singletons and large noisy sets.
+        wise = H_in / aps_sizes                                 # (n,)
+
+        return torch.topk(wise, budget)[1]
+
+
 class CPDiversityAPSSampling(AcquisitionStrategy):
     """Conformal Diversity-Uncertainty Sampling (CDUS) — novel strategy.
 

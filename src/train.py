@@ -184,7 +184,7 @@ def main(cfg: DictConfig):
         # Select new samples (skip last round)
         if round_idx < cfg.num_rounds - 1:
             # Compute qhat on calibration set (use strategy-specific method)
-            if cfg.strategy.name in ('cp_aps', 'cp_boundary_uncertainty', 'cp_diversity', 'cp_aps_spm'):
+            if cfg.strategy.name in ('cp_aps', 'cp_boundary_uncertainty', 'cp_diversity', 'cp_aps_spm', 'cp_wise'):
                 qhat = compute_qhat_aps(model, calib_loader, cfg.cp_alpha, device)
             elif cfg.strategy.name == 'cp_rmcp':
                 qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
