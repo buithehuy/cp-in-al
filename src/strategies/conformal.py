@@ -107,54 +107,54 @@ class CPVShapedEntropySampling(AcquisitionStrategy):
         return torch.topk(score, budget)[1]
 
 
-# class CPAPSSampling(AcquisitionStrategy):
-#     """Adaptive Prediction Sets (APS) - conformal prediction with cumulative probability.
+class CPAPSSampling(AcquisitionStrategy):
+    """Adaptive Prediction Sets (APS) - conformal prediction with cumulative probability.
     
-#     APS differs from standard conformal prediction by using an adaptive threshold:
-#     - Sort class probabilities in descending order
-#     - Include classes cumulatively until sum exceeds 1 - qhat
-#     - Produces smaller, more focused prediction sets
-#     - Selection prioritizes samples with larger APS sets (more uncertain)
-#     """
+    APS differs from standard conformal prediction by using an adaptive threshold:
+    - Sort class probabilities in descending order
+    - Include classes cumulatively until sum exceeds 1 - qhat
+    - Produces smaller, more focused prediction sets
+    - Selection prioritizes samples with larger APS sets (more uncertain)
+    """
     
-#     def __init__(self):
-#         super().__init__(name="cp_aps")
+    def __init__(self):
+        super().__init__(name="cp_aps")
     
-#     def select(self, probs, budget, qhat, **kwargs):
-#         """Select samples with largest APS prediction set sizes.
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with largest APS prediction set sizes.
         
-#         Args:
-#             probs: Probability tensor of shape (n_samples, n_classes)
-#             budget: Number of samples to select
-#             qhat: APS conformity score threshold (cumulative probability)
+        Args:
+            probs: Probability tensor of shape (n_samples, n_classes)
+            budget: Number of samples to select
+            qhat: APS conformity score threshold (cumulative probability)
             
-#         Returns:
-#             Tensor of selected indices
-#         """
-#         # Sort probabilities in descending order for each sample
-#         sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
+        Returns:
+            Tensor of selected indices
+        """
+        # Sort probabilities in descending order for each sample
+        sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
         
-#         # Compute cumulative sum of sorted probabilities
-#         cumsum_probs = torch.cumsum(sorted_probs, dim=1)
+        # Compute cumulative sum of sorted probabilities
+        cumsum_probs = torch.cumsum(sorted_probs, dim=1)
         
-#         # For APS, qhat is already a cumulative probability threshold
-#         # Find where cumulative sum first exceeds qhat
-#         threshold = qhat
+        # For APS, qhat is already a cumulative probability threshold
+        # Find where cumulative sum first exceeds qhat
+        threshold = qhat
         
-#         # For each sample, find the index where cumsum first exceeds threshold
-#         # Add 1 because we need to include that class
-#         set_sizes = torch.zeros(probs.shape[0])
-#         for i in range(probs.shape[0]):
-#             # Find first index where cumsum exceeds threshold
-#             exceeds = (cumsum_probs[i] >= threshold).nonzero(as_tuple=True)[0]
-#             if len(exceeds) > 0:
-#                 set_sizes[i] = exceeds[0].item() + 1  # +1 to include that class
-#             else:
-#                 # If never exceeds threshold, include all classes
-#                 set_sizes[i] = probs.shape[1]
+        # For each sample, find the index where cumsum first exceeds threshold
+        # Add 1 because we need to include that class
+        set_sizes = torch.zeros(probs.shape[0])
+        for i in range(probs.shape[0]):
+            # Find first index where cumsum exceeds threshold
+            exceeds = (cumsum_probs[i] >= threshold).nonzero(as_tuple=True)[0]
+            if len(exceeds) > 0:
+                set_sizes[i] = exceeds[0].item() + 1  # +1 to include that class
+            else:
+                # If never exceeds threshold, include all classes
+                set_sizes[i] = probs.shape[1]
         
-#         # Select samples with largest set sizes (most uncertain)
-#         return torch.topk(set_sizes, budget)[1]
+        # Select samples with largest set sizes (most uncertain)
+        return torch.topk(set_sizes, budget)[1]
 
 import torch
 import torch.nn.functional as F
