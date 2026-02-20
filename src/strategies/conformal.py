@@ -286,6 +286,102 @@ class CPSetPartitionMISampling(AcquisitionStrategy):
         return torch.topk(mutual_info, budget)[1]
 
 
+class CPDiversityAPSSampling(AcquisitionStrategy):
+    """Conformal Diversity-Uncertainty Sampling (CDUS) — novel strategy.
+
+    Root cause of entropy failure on CIFAR-100: entropy selects REDUNDANT
+    samples — many pool images are confused about the SAME set of classes.
+    Labeling one teaches the same lesson as labeling ten.
+
+    This strategy combines:
+        1. APS uncertainty  : ranks samples by conformal set size (cp_aps)
+           — already beats pure entropy in later rounds.
+        2. Greedy diversity : ensures successive selections are NOT confused
+           about the same classes, by penalizing cosine similarity in
+           probability space to already-selected samples.
+
+    Score at greedy step t:
+        score_t(x) = APS_set_size(x) / C   − λ × max_{x'∈S_t} cos_sim(p(x), p(x'))
+
+    The cosine similarity between softmax vectors is high when two samples
+    are uncertain about the SAME classes → penalizing it forces diversity
+    across the model's confusion manifold.
+
+    Fully conformal: APS qhat is used (same as cp_aps / cp_boundary).
+
+    Implementation note: to stay tractable for large pools, we first filter
+    to the top (candidate_ratio × budget) candidates by APS uncertainty,
+    then run the greedy diversity pass on that reduced set.
+    """
+
+    def __init__(self, lambda_div: float = 1.0, candidate_ratio: int = 8):
+        super().__init__(name="cp_diversity")
+        self.lambda_div   = lambda_div
+        self.candidate_ratio = candidate_ratio
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Greedy conformal-diverse selection.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   APS threshold from calibration
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        n, C = probs.shape
+
+        # ── Step 1: APS set size (vectorized) ────────────────────────────────
+        sorted_probs, _ = torch.sort(probs, dim=1, descending=True)
+        cumsum_probs     = torch.cumsum(sorted_probs, dim=1)          # (n, C)
+
+        exceeds_mask = (cumsum_probs >= qhat)                          # (n, C)
+        has_exceed   = exceeds_mask.any(dim=1)                        # (n,)
+        first_exceed = exceeds_mask.long().argmax(dim=1)              # (n,)
+        aps_sizes    = torch.where(has_exceed, first_exceed + 1,
+                                   torch.tensor(C, dtype=torch.long)) # (n,)
+
+        unc = aps_sizes.float() / C                                   # (n,) ∈ (0,1]
+
+        # ── Step 2: Filter to top candidates ──────────────────────────────────
+        # Add tiny random jitter to break ties in APS sizes (integers)
+        # so that torch.topk doesn't always pick the first-encountered indices.
+        k_cand  = min(self.candidate_ratio * budget, n)
+        unc_jitter = unc + torch.rand(n) * 1e-6     # break ties randomly
+        top_idx = torch.topk(unc_jitter, k_cand)[1]  # (k_cand,)
+
+        p_cand   = probs[top_idx]                                     # (k_cand, C)
+        unc_cand = unc[top_idx]                                       # (k_cand,)
+
+        # L2-normalise rows for cosine similarity
+        p_norm   = p_cand / (p_cand.norm(dim=1, keepdim=True) + 1e-9) # (k_cand, C)
+
+        # ── Step 3: Greedy diversity selection ────────────────────────────────
+        selected_local = []
+        selected_mask  = torch.zeros(k_cand, dtype=torch.bool)
+        max_sim        = torch.zeros(k_cand)                          # (k_cand,)
+
+        for _ in range(budget):
+            if not selected_local:
+                scores = unc_cand
+            else:
+                scores = unc_cand - self.lambda_div * max_sim
+
+            scores = scores.masked_fill(selected_mask, float('-inf'))
+            best   = int(scores.argmax().item())
+
+            selected_local.append(best)
+            selected_mask[best] = True
+
+            # Update max cosine-sim to newly selected sample
+            sim_new = (p_norm @ p_norm[best]).abs()                   # (k_cand,)
+            max_sim = torch.maximum(max_sim, sim_new)
+
+        # ── Step 4: Map local indices back to global indices ──────────────────
+        return top_idx[torch.tensor(selected_local, dtype=torch.long)]
+
+
 # import torch
 
 # class CPAPSSampling(AcquisitionStrategy):
