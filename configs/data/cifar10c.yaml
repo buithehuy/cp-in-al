@@ -1,0 +1,19 @@
+name: CIFAR10C
+num_classes: 10
+root: ./data
+batch_size: 128
+num_workers: 2
+
+# Corruption settings
+corruption: gaussian_noise  # Options: gaussian_noise, shot_noise, impulse_noise, defocus_blur, etc.
+severity: 5                 # Severity level (1-5)
+corruption_ratio: 0.2       # Fraction of pool data to corrupt (0.0 - 1.0)
+
+# Active Learning parameters (Train size: 50,000)
+initial_labeled: 5000       # 10%
+calibration_size: 5000      # 10%
+budget_per_round: 2000      # 20 rounds
+
+# CIFAR-10 normalization
+mean: [0.4914, 0.4822, 0.4465]
+std: [0.2470, 0.2435, 0.2616]

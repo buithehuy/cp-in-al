@@ -11,6 +11,7 @@ from data import CIFAR10DataModule
 from data import CIFAR100DataModule
 from data import CIFAR100NDataModule
 from data import CIFAR100CDataModule
+from data import CIFAR10CDataModule
 from data import STL10DataModule
 from data import SVHNDataModule
 from data import CUB200DataModule
@@ -71,6 +72,8 @@ def main(cfg: DictConfig):
         data_module = CIFAR100NDataModule(cfg.data)
     elif cfg.data.name == "CIFAR100C":
         data_module = CIFAR100CDataModule(cfg.data)
+    elif cfg.data.name == "CIFAR10C":
+        data_module = CIFAR10CDataModule(cfg.data)
     elif cfg.data.name == "STL10":
         data_module = STL10DataModule(cfg.data)
     elif cfg.data.name == "SVHN":
