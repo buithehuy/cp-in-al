@@ -342,3 +342,77 @@ def evaluate_rcs(model, loader, qhat, device='cuda'):
     zero_sets    = (pred_sets.sum(dim=1) == 0).sum().item()
 
     return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets}
+
+
+def compute_qhat_classwise(model, loader, alpha=0.1, device='cuda'):
+    """Compute class-conditional (classwise) conformal thresholds.
+
+    Instead of one global qhat, computes a separate qhat_y for each class y
+    on the calibration set, using only samples whose true label is y.
+
+    This gives tighter, class-adaptive prediction sets and guarantees
+    class-conditional coverage: P(y ∈ C(x) | Y=y) >= 1-alpha for each y.
+
+    Args:
+        model:  Trained model
+        loader: Calibration DataLoader
+        alpha:  Miscoverage level (e.g. 0.1 for 90% coverage)
+        device: Device
+
+    Returns:
+        qhat_per_class: Tensor of shape (num_classes,) with per-class thresholds
+    """
+    probs, labels = get_probs(model, loader, device)
+    num_classes = probs.shape[1]
+
+    # Non-conformity score: 1 - p(true class)
+    scores = 1.0 - probs[torch.arange(len(labels)), labels]  # (n,)
+
+    qhat_per_class = torch.zeros(num_classes)
+
+    for c in range(num_classes):
+        mask = (labels == c)
+        n_c = mask.sum().item()
+
+        if n_c == 0:
+            # No calibration examples for class c → use global fallback
+            qhat_per_class[c] = 1.0
+            continue
+
+        scores_c = scores[mask]
+        k = int(np.ceil((n_c + 1) * (1 - alpha)))
+        k = min(k - 1, n_c - 1)
+        qhat_per_class[c] = torch.sort(scores_c)[0][k].item()
+
+    return qhat_per_class  # shape: (num_classes,)
+
+
+def evaluate_classwise(model, loader, qhat_per_class, device='cuda'):
+    """Evaluate classwise conformal prediction metrics.
+
+    Prediction set: C(x) = {y : 1 - p_y <= qhat_y}
+                         = {y : p_y >= 1 - qhat_y}
+
+    Args:
+        model:           Trained model
+        loader:          Test DataLoader
+        qhat_per_class:  Tensor (num_classes,) from compute_qhat_classwise
+        device:          Device
+
+    Returns:
+        dict with coverage, avg_set_size, zero_sets
+    """
+    probs, labels = get_probs(model, loader, device)
+
+    # threshold_y = 1 - qhat_y for each class
+    thresholds = (1.0 - qhat_per_class).to(probs.device)  # (C,)
+
+    # class y is in prediction set iff p_y >= threshold_y
+    pred_sets = probs >= thresholds.unsqueeze(0)           # (n, C)
+
+    coverage     = pred_sets[torch.arange(len(labels)), labels].float().mean().item()
+    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
+    zero_sets    = (pred_sets.sum(dim=1) == 0).sum().item()
+
+    return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets}
+

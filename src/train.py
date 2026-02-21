@@ -26,6 +26,8 @@ from utils import (
     evaluate_rmcp,
     compute_qhat_rcs,
     evaluate_rcs,
+    compute_qhat_classwise,
+    evaluate_classwise,
     get_probs,
     train_round,
     eval_acc
@@ -136,6 +138,8 @@ def main(cfg: DictConfig):
     print(f"\nStarting active learning loop ({cfg.num_rounds} rounds)...")
     print("=" * 80)
     
+    pending_log = None  # Log từ lần select trước, sẽ in sau round hiện tại
+    
     for round_idx in range(cfg.num_rounds + 1):
         # Evaluate model
         acc = eval_acc(model, test_loader, device)
@@ -150,6 +154,9 @@ def main(cfg: DictConfig):
         elif cfg.strategy.name in ('cp_rel_margin', 'cp_rcs_mi', 'cp_rcs_v2'):
             qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_rcs(model, test_loader, qhat, device)
+        elif cfg.strategy.name == 'cp_classwise':
+            qhat = compute_qhat_classwise(model, calib_loader, cfg.cp_alpha, device)
+            cp_metrics = evaluate_classwise(model, test_loader, qhat, device)
         else:
             qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_conformal_prediction(model, test_loader, qhat, device)
@@ -162,14 +169,17 @@ def main(cfg: DictConfig):
         results['cp_avg_set_size'].append(cp_metrics['avg_set_size'])
         results['cp_zero_sets'].append(cp_metrics['zero_sets'])
         
-        # Print status
+        # Print status (no AvgSet/Zero to keep log clean)
         pct = 100 * samples_trained / total_available if samples_trained > 0 else 0
         print(f"Round {round_idx:2d}: "
               f"Acc={acc:5.2f}% | "
               f"Trained={samples_trained:5d} ({pct:4.1f}%) | "
-              f"Cov={cp_metrics['coverage']:.3f} | "
-              f"AvgSet={cp_metrics['avg_set_size']:.2f} | "
-              f"Zero={cp_metrics['zero_sets']}")
+              f"Cov={cp_metrics['coverage']:.3f}")
+        
+        # Print selection log from previous round (if any)
+        if pending_log:
+            print(pending_log)
+            pending_log = None
         
         # Break before last training round
         if round_idx == cfg.num_rounds:
@@ -198,6 +208,8 @@ def main(cfg: DictConfig):
                 qhat = compute_qhat_rmcp(model, calib_loader, cfg.cp_alpha, device)
             elif cfg.strategy.name in ('cp_rel_margin', 'cp_rcs_mi', 'cp_rcs_v2'):
                 qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
+            elif cfg.strategy.name == 'cp_classwise':
+                qhat = compute_qhat_classwise(model, calib_loader, cfg.cp_alpha, device)
             else:
                 qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             
@@ -215,12 +227,12 @@ def main(cfg: DictConfig):
             # Update labeled and pool sets
             selected_global = [pool_idx[i] for i in selected_idx.tolist()]
             
-            # Log clean vs corrupt breakdown for CIFAR-100-C
+            # Build pending log for clean vs corrupt breakdown (printed after next round header)
             if hasattr(data_module, 'corrupted_indices') and data_module.corrupted_indices:
                 n_corrupt = sum(1 for i in selected_global if i in data_module.corrupted_indices)
                 n_clean = len(selected_global) - n_corrupt
-                print(f"  → Selected: {n_clean} clean + {n_corrupt} corrupted "
-                      f"({100*n_corrupt/len(selected_global):.1f}% corrupted)")
+                pending_log = (f"  → Selected: {n_clean} clean + {n_corrupt} corrupted "
+                               f"({100*n_corrupt/len(selected_global):.1f}% corrupted)")
             
             labeled_idx.extend(selected_global)
             pool_idx = [i for i in pool_idx if i not in set(selected_global)]

@@ -961,9 +961,50 @@ class CPRCSv2Sampling(AcquisitionStrategy):
             p_second = sorted_probs[:, 1]                     # (n,)
             score = p_second / (p_max + 1e-9)                 # (n,) ∈ [0, 1)
 
-        else:  # weighted
-            # Score = (||p||² − p_max²) / p_max  (all runner-ups weighted)
-            gini_others = (probs ** 2).sum(dim=1) - p_max ** 2  # (n,)
-            score = gini_others / (p_max + 1e-9)              # (n,)
-
         return torch.topk(score, budget)[1]
+
+
+class CPClasswiseSampling(AcquisitionStrategy):
+    """Classwise Conformal Prediction sampling — novel class-conditional strategy.
+
+    Instead of one global qhat, uses a separate qhat_y per class calibrated on
+    the calibration set:
+
+        C_cw(x) = {y : p_y >= 1 - qhat_y}
+
+    This gives class-adaptive prediction sets:
+    - Rare/hard classes (low p_y on calib) → large qhat_y → easier to include
+      → hard pool samples from those classes get LARGER sets → selected ✓
+    - Easy/dominant classes (high p_y on calib) → small qhat_y → stricter threshold
+      → only truly uncertain samples for those classes get large sets ✓
+
+    Why this beats marginal CP for acquisition:
+    - Marginal CP uses one global threshold 1-qhat, which tends to over-include
+      easy classes and under-include hard classes in prediction sets.
+    - Classwise CP corrects this bias: pool samples that are hard relative to
+      their own class distribution get larger sets and are prioritized.
+
+    Fully conformal: uses compute_qhat_classwise on calibration set.
+    """
+
+    def __init__(self):
+        super().__init__(name="cp_classwise")
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with largest classwise prediction set sizes.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   Tensor (num_classes,) from compute_qhat_classwise
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        # thresholds: (C,) → broadcast to (n, C)
+        thresholds = (1.0 - qhat).to(probs.device)           # (C,)
+        pred_sets  = probs >= thresholds.unsqueeze(0)         # (n, C)
+        set_sizes  = pred_sets.sum(dim=1).float()             # (n,)
+
+        return torch.topk(set_sizes, budget)[1]
+
