@@ -211,6 +211,14 @@ def main(cfg: DictConfig):
             
             # Update labeled and pool sets
             selected_global = [pool_idx[i] for i in selected_idx.tolist()]
+            
+            # Log clean vs corrupt breakdown for CIFAR-100-C
+            if hasattr(data_module, 'corrupted_indices') and data_module.corrupted_indices:
+                n_corrupt = sum(1 for i in selected_global if i in data_module.corrupted_indices)
+                n_clean = len(selected_global) - n_corrupt
+                print(f"  → Selected: {n_clean} clean + {n_corrupt} corrupted "
+                      f"({100*n_corrupt/len(selected_global):.1f}% corrupted)")
+            
             labeled_idx.extend(selected_global)
             pool_idx = [i for i in pool_idx if i not in set(selected_global)]
     

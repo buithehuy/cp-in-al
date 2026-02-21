@@ -88,6 +88,8 @@ class CIFAR100CDataModule:
             print(f"Pool size: {len(pool_idx)}")
             self._inject_corruption(pool_idx, seed)
             self._is_corrupted = True
+        else:
+            self.corrupted_indices = set()  # No corruption
             
         return labeled_idx, calib_idx, pool_idx
     
@@ -104,6 +106,9 @@ class CIFAR100CDataModule:
             
         # Select random indices from the pool to corrupt
         corrupt_indices = np.random.choice(pool_idx, num_corrupt, replace=False)
+        
+        # Save corrupted indices as a set for later querying
+        self.corrupted_indices = set(corrupt_indices.tolist())
         
         print(f"Injecting {self.corruption_name} (severity={self.severity}) into {num_corrupt} pool images ({self.corruption_ratio:.1%})...")
         
