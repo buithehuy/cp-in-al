@@ -1008,3 +1008,68 @@ class CPClasswiseSampling(AcquisitionStrategy):
 
         return torch.topk(set_sizes, budget)[1]
 
+
+class CPGapSampling(AcquisitionStrategy):
+    """CP Softmax Gap (CP-GAP) — continuous boundary-distance scoring.
+
+    Problem with CP_SIZE: it counts how many classes exceed the threshold
+    1-qhat, yielding an INTEGER score with massive ties (only 0..C values).
+    Two samples with the same set_size are indistinguishable, even if one
+    has classes tightly clustered around the boundary (genuinely hard) while
+    the other has classes far above it (noisy/random).
+
+    CP-GAP replaces the binary in/out counting with a CONTINUOUS score that
+    measures how close each class's probability sits to the conformal boundary:
+
+        gap_y = |p_y - (1 - qhat)|
+
+        CP_GAP(x) = Σ_{y=1}^{C} exp(-gap_y / τ)
+
+    Each class contributes maximally when p_y ≈ 1-qhat (exactly at boundary)
+    and contributes near-zero when p_y is far from the boundary.
+
+    --- Why this separates hard from noisy samples ---
+
+    | Sample type          | Class distribution near boundary | CP_GAP | CP_SIZE |
+    |----------------------|---------------------------------:|:------:|:-------:|
+    | Hard (2-class boundary) | 2 classes tightly at boundary | HIGH   | 2       |
+    | Noisy (flat p)       | classes scattered far from boundary | LOW  | 2-3     |
+    | Confident            | 1 class far above, rest far below | LOW   | 1       |
+
+    At a given set_size, CP-GAP produces a CONTINUOUS ranking that breaks ties
+    in a principled way: samples whose classes hover near the conformal
+    decision boundary are ranked higher.
+
+    Temperature τ controls sensitivity:
+    - Small τ (0.01): only classes VERY close to boundary contribute
+    - Large τ (0.1): broader neighborhood around boundary contributes
+
+    Pure uncertainty, fully conformal (uses standard marginal qhat).
+    """
+
+    def __init__(self, temperature: float = 0.05):
+        super().__init__(name="cp_gap")
+        self.temperature = temperature
+
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with most classes near the conformal boundary.
+
+        Args:
+            probs:  Probability tensor (n_samples, n_classes)
+            budget: Number of samples to select (K)
+            qhat:   Marginal conformal threshold from calibration
+
+        Returns:
+            Tensor of selected indices (shape: [budget])
+        """
+        # Distance of each class probability to the conformal boundary
+        boundary = 1.0 - qhat                                    # scalar
+        gaps = (probs - boundary).abs()                          # (n, C)
+
+        # Soft boundary proximity: peaks at gap=0, decays exponentially
+        proximity = torch.exp(-gaps / self.temperature)          # (n, C)
+
+        # Aggregate: total boundary proximity across all classes
+        score = proximity.sum(dim=1)                             # (n,)
+
+        return torch.topk(score, budget)[1]

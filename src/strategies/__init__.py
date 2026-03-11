@@ -23,6 +23,7 @@ from .conformal import (
     CPRCSMISampling,
     CPRCSv2Sampling,
     CPClasswiseSampling,
+    CPGapSampling,
 )
 
 # Strategy registry
@@ -47,6 +48,7 @@ STRATEGIES = {
     "cp_rcs_mi": CPRCSMISampling,
     "cp_rcs_v2": CPRCSv2Sampling,
     "cp_classwise": CPClasswiseSampling,
+    "cp_gap": CPGapSampling,
 }
 
 
@@ -89,6 +91,7 @@ __all__ = [
     'CPRCSMISampling',
     'CPRCSv2Sampling',
     'CPClasswiseSampling',
+    'CPGapSampling',
     'STRATEGIES',
     'get_strategy',
 ]
