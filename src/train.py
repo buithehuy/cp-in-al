@@ -29,6 +29,9 @@ from utils import (
     compute_qhat_classwise,
     evaluate_classwise,
     get_probs,
+    get_features_and_probs,
+    compute_qhat_feature_cp,
+    evaluate_feature_cp,
     train_round,
     eval_acc
 )
@@ -157,6 +160,9 @@ def main(cfg: DictConfig):
         elif cfg.strategy.name == 'cp_classwise':
             qhat = compute_qhat_classwise(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_classwise(model, test_loader, qhat, device)
+        elif cfg.strategy.name == 'cp_feature_size':
+            qhat = compute_qhat_feature_cp(model, calib_loader, cfg.cp_alpha, device)
+            cp_metrics = evaluate_feature_cp(model, test_loader, qhat, device)
         else:
             qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             cp_metrics = evaluate_conformal_prediction(model, test_loader, qhat, device)
@@ -210,19 +216,35 @@ def main(cfg: DictConfig):
                 qhat = compute_qhat_rcs(model, calib_loader, cfg.cp_alpha, device)
             elif cfg.strategy.name == 'cp_classwise':
                 qhat = compute_qhat_classwise(model, calib_loader, cfg.cp_alpha, device)
+            elif cfg.strategy.name == 'cp_feature_size':
+                qhat = compute_qhat_feature_cp(model, calib_loader, cfg.cp_alpha, device)
             else:
                 qhat = compute_qhat(model, calib_loader, cfg.cp_alpha, device)
             
-            # Get probabilities for pool
+            # Get probabilities for pool and select samples
             pool_loader = data_module.get_loader(pool_idx, shuffle=False)
-            pool_probs, _ = get_probs(model, pool_loader, device)
             
-            # Select samples using acquisition strategy
-            selected_idx = strategy.select(
-                probs=pool_probs,
-                budget=cfg.data.budget_per_round,
-                qhat=qhat
-            )
+            if cfg.strategy.name == 'cp_feature_size':
+                pool_features, pool_probs, _ = get_features_and_probs(model, pool_loader, device)
+                if hasattr(model, 'model') and hasattr(model.model, 'fc'):
+                    weights = model.model.fc.weight.data.cpu()
+                else:
+                    raise ValueError("Could not find weights of final fully connected layer.")
+                    
+                selected_idx = strategy.select(
+                    probs=pool_probs,
+                    budget=cfg.data.budget_per_round,
+                    qhat=qhat,
+                    features=pool_features,
+                    weights=weights
+                )
+            else:
+                pool_probs, _ = get_probs(model, pool_loader, device)
+                selected_idx = strategy.select(
+                    probs=pool_probs,
+                    budget=cfg.data.budget_per_round,
+                    qhat=qhat
+                )
             
             # Update labeled and pool sets
             selected_global = [pool_idx[i] for i in selected_idx.tolist()]

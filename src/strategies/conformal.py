@@ -25,6 +25,43 @@ class CPSizeSampling(AcquisitionStrategy):
         return torch.topk(set_sizes, budget)[1]
 
 
+class FeatureCPSizeSampling(AcquisitionStrategy):
+    """Feature CP Size sampling - select samples with largest prediction sets based on feature non-conformity.
+    
+    This strategy uses the L2 distance between intermediate features and the final layer class weights
+    (surrogate features) as the non-conformity score, as requested by the user.
+    """
+    
+    def __init__(self):
+        super().__init__(name="cp_feature_size")
+    
+    def select(self, probs, budget, qhat, **kwargs):
+        """Select samples with largest Feature CP prediction set sizes.
+        
+        Args:
+            probs: Probability tensor of shape (n_samples, n_classes)
+            budget: Number of samples to select
+            qhat: Feature conformity score threshold
+            **kwargs: Must contain 'features' and 'weights'
+            
+        Returns:
+            Tensor of selected indices
+        """
+        features = kwargs.get('features')
+        weights = kwargs.get('weights')
+        if features is None or weights is None:
+            raise ValueError("FeatureCPSizeSampling requires 'features' and 'weights' in kwargs")
+            
+        features_expanded = features.unsqueeze(1)
+        weights_expanded = weights.unsqueeze(0)
+        
+        distances = torch.norm(features_expanded - weights_expanded, p=2, dim=2)
+        
+        # Prediction set: classes with distance <= qhat
+        set_sizes = (distances <= qhat).sum(dim=1).float()
+        return torch.topk(set_sizes, budget)[1]
+
+
 class CPVShapedSampling(AcquisitionStrategy):
     """CP V-shaped sampling - prioritize both set_size=0 (overconfident) and large sets."""
     

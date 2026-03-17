@@ -29,6 +29,48 @@ def get_probs(model, loader, device='cuda'):
     return torch.cat(probs_list), torch.cat(labels_list)
 
 
+def get_features_and_probs(model, loader, device='cuda'):
+    """Extract softmax probabilities and final features from model.
+    
+    Args:
+        model: Trained model
+        loader: DataLoader
+        device: Device to use
+        
+    Returns:
+        Tuple of (features, probs, labels) as tensors
+    """
+    model.eval()
+    features_list, probs_list, labels_list = [], [], []
+    
+    captured_features = {}
+    def hook(module, input, output):
+        captured_features['features'] = input[0].detach()
+        
+    if hasattr(model, 'model') and hasattr(model.model, 'fc'):
+        handle = model.model.fc.register_forward_hook(hook)
+    else:
+        raise ValueError("Could not find final fully connected layer (model.model.fc) to attach hook.")
+    
+    with torch.no_grad():
+        for x, y in loader:
+            x = x.to(device)
+            logits = model(x)
+            probs = F.softmax(logits, dim=1).cpu()
+            
+            # The hook will have populated captured_features['features']
+            # Reshape it to (batch_size, feature_dim) in case it's (batch_size, feature_dim, 1, 1)
+            feat = captured_features['features'].cpu()
+            if feat.dim() > 2:
+                feat = feat.view(feat.size(0), -1)
+            features_list.append(feat)
+            probs_list.append(probs)
+            labels_list.append(y)
+            
+    handle.remove()
+    return torch.cat(features_list), torch.cat(probs_list), torch.cat(labels_list)
+
+
 def compute_qhat(model, loader, alpha=0.1, device='cuda'):
     """Compute conformity score threshold qhat.
     
@@ -416,3 +458,73 @@ def evaluate_classwise(model, loader, qhat_per_class, device='cuda'):
 
     return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets}
 
+
+def compute_qhat_feature_cp(model, loader, alpha=0.1, device='cuda'):
+    """Compute conformity score threshold qhat based on Feature CP distance.
+    
+    Args:
+        model: Trained model
+        loader: Calibration DataLoader
+        alpha: Miscoverage level (e.g., 0.1 for 90% coverage)
+        device: Device to use
+        
+    Returns:
+        qhat: Conformity score threshold
+    """
+    features, probs, labels = get_features_and_probs(model, loader, device)
+    
+    if hasattr(model, 'model') and hasattr(model.model, 'fc'):
+        weights = model.model.fc.weight.data.cpu()
+    else:
+        raise ValueError("Could not find weights of final fully connected layer.")
+        
+    n_samples = len(labels)
+    scores = torch.zeros(n_samples)
+    
+    for i in range(n_samples):
+        y = labels[i]
+        scores[i] = torch.norm(features[i] - weights[y], p=2).item()
+        
+    n = len(labels)
+    k = int(np.ceil((n + 1) * (1 - alpha)))
+    k = min(k - 1, n - 1)
+    
+    qhat = torch.sort(scores)[0][k].item()
+    return qhat
+
+
+def evaluate_feature_cp(model, loader, qhat, device='cuda'):
+    """Evaluate Feature CP metrics.
+    
+    Args:
+        model: Trained model
+        loader: Test DataLoader
+        qhat: Feature CP conformity score threshold
+        device: Device to use
+        
+    Returns:
+        Dictionary with CP metrics (coverage, avg_set_size, zero_sets)
+    """
+    features, probs, labels = get_features_and_probs(model, loader, device)
+    if hasattr(model, 'model') and hasattr(model.model, 'fc'):
+        weights = model.model.fc.weight.data.cpu()
+    else:
+        raise ValueError("Could not find weights of final fully connected layer.")
+        
+    n_samples, n_classes = probs.shape
+    features_expanded = features.unsqueeze(1)
+    weights_expanded = weights.unsqueeze(0)
+    
+    # Distance from each feature to each class weight
+    distances = torch.norm(features_expanded - weights_expanded, p=2, dim=2)
+    pred_sets = distances <= qhat
+    
+    coverage = pred_sets[torch.arange(n_samples), labels].float().mean().item()
+    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
+    zero_sets = (pred_sets.sum(dim=1) == 0).sum().item()
+    
+    return {
+        'coverage': coverage,
+        'avg_set_size': avg_set_size,
+        'zero_sets': zero_sets
+    }
