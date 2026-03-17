@@ -11,6 +11,9 @@ from .conformal_prediction import (
     evaluate_rcs,
     compute_qhat_classwise,
     evaluate_classwise,
+    get_features_and_probs,
+    compute_qhat_feature_cp,
+    evaluate_feature_cp,
 )
 from .training import train_round, eval_acc
 from .visualization import (
@@ -39,6 +42,9 @@ __all__ = [
     'evaluate_rcs',
     'compute_qhat_classwise',
     'evaluate_classwise',
+    'get_features_and_probs',
+    'compute_qhat_feature_cp',
+    'evaluate_feature_cp',
     'train_round',
     'eval_acc',
     'plot_accuracy_vs_samples',
