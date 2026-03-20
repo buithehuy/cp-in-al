@@ -1,0 +1,20 @@
+name: CUB200C
+num_classes: 200
+root: ./data
+batch_size: 64              # Reduced due to larger image size (224x224)
+num_workers: 2
+image_size: 224             # Standard size for fine-grained classification
+
+# Corruption settings
+corruption: gaussian_noise  # Options: gaussian_noise, shot_noise, impulse_noise, defocus_blur, etc.
+severity: 5                 # Severity level (1-5)
+corruption_ratio: 0.2       # Fraction of pool data to corrupt (0.0 - 1.0)
+
+# Active Learning parameters (Train size: 5,994)
+initial_labeled: 599       # 10% of 5,994
+calibration_size: 599      # 10% of 5,994
+budget_per_round: 240      # 4,796 / 20 rounds
+
+# CUB-200-2011 normalization
+mean: [0.4859, 0.4996, 0.4318]
+std: [0.2321, 0.2277, 0.2665]

@@ -15,6 +15,9 @@ from data import CIFAR10CDataModule
 from data import STL10DataModule
 from data import SVHNDataModule
 from data import CUB200DataModule
+from data import SVHNCDataModule
+from data import STL10CDataModule
+from data import CUB200CDataModule
 from models import ResNet18
 from strategies import get_strategy
 from utils import (
@@ -85,6 +88,12 @@ def main(cfg: DictConfig):
         data_module = SVHNDataModule(cfg.data)
     elif cfg.data.name == "CUB200":
         data_module = CUB200DataModule(cfg.data)
+    elif cfg.data.name == "SVHNC":
+        data_module = SVHNCDataModule(cfg.data)
+    elif cfg.data.name == "STL10C":
+        data_module = STL10CDataModule(cfg.data)
+    elif cfg.data.name == "CUB200C":
+        data_module = CUB200CDataModule(cfg.data)
     else:
         raise ValueError(f"Unknown dataset: {cfg.data.name}")
     
