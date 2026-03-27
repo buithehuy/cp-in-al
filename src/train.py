@@ -18,6 +18,8 @@ from data import CUB200DataModule
 from data import SVHNCDataModule
 from data import STL10CDataModule
 from data import CUB200CDataModule
+from data import MNISTDataModule
+from data import MNISTCDataModule
 from models import ResNet18
 from strategies import get_strategy
 from utils import (
@@ -94,6 +96,10 @@ def main(cfg: DictConfig):
         data_module = STL10CDataModule(cfg.data)
     elif cfg.data.name == "CUB200C":
         data_module = CUB200CDataModule(cfg.data)
+    elif cfg.data.name == "MNIST":
+        data_module = MNISTDataModule(cfg.data)
+    elif cfg.data.name == "MNISTC":
+        data_module = MNISTCDataModule(cfg.data)
     else:
         raise ValueError(f"Unknown dataset: {cfg.data.name}")
     

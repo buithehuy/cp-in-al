@@ -1,0 +1,19 @@
+name: MNISTC
+num_classes: 10
+root: ./data
+batch_size: 128
+num_workers: 2
+
+# Corruption settings
+corruption: gaussian_noise  # Options: gaussian_noise, shot_noise, impulse_noise, defocus_blur, etc.
+severity: 3                 # Severity level (1-5)
+corruption_ratio: 0.2       # Fraction of pool data to corrupt (0.0 - 1.0)
+
+# Active Learning parameters (Train size: 60,000)
+initial_labeled: 600
+calibration_size: 600
+budget_per_round: 200
+
+# MNIST normalization (grayscale)
+mean: [0.1307]
+std: [0.3081]

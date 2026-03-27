@@ -1,0 +1,16 @@
+# MNIST dataset configuration
+name: MNIST
+root: ./data
+num_classes: 10
+batch_size: 128
+num_workers: 2
+
+# Normalization statistics (grayscale)
+mean: [0.1307]
+std: [0.3081]
+
+# Active Learning parameters (Train size: 60,000)
+# ~10% calibration, ~10% initial labeled, ~80% pool / 20 rounds
+initial_labeled: 600       # ~10% of 6,000 (1-class representative subset)
+calibration_size: 600
+budget_per_round: 200
