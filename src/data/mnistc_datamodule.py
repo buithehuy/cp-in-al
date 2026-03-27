@@ -36,13 +36,13 @@ class MNISTCDataModule:
             transforms.RandomCrop(28, padding=4),
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-            transforms.Normalize(self.mean * 3, self.std * 3)
+            transforms.Normalize(list(self.mean) * 3, list(self.std) * 3)
         ])
 
         self.transform_test = transforms.Compose([
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-            transforms.Normalize(self.mean * 3, self.std * 3)
+            transforms.Normalize(list(self.mean) * 3, list(self.std) * 3)
         ])
 
         # Load standard MNIST
