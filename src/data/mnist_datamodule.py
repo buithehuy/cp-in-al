@@ -16,16 +16,18 @@ class MNISTDataModule:
         self.mean = cfg.get('mean', [0.1307])
         self.std = cfg.get('std', [0.3081])
 
-        # Transforms
+        # Transforms – expand grayscale to 3 channels so ResNet18 works out of the box
         self.transform_train = transforms.Compose([
             transforms.RandomCrop(28, padding=4),
             transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std)
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+            transforms.Normalize(self.mean * 3, self.std * 3)
         ])
 
         self.transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std)
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+            transforms.Normalize(self.mean * 3, self.std * 3)
         ])
 
         # Load MNIST
