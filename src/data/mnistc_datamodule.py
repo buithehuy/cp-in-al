@@ -4,6 +4,7 @@ from torchvision import datasets, transforms
 import numpy as np
 import copy
 import torch
+import cv2
 from imagecorruptions import corrupt
 
 
@@ -120,17 +121,20 @@ class MNISTCDataModule:
             # self.train_set.data: torch.Tensor [N, 28, 28], uint8
             img_gray = self.train_set.data[idx].numpy()  # (28, 28) uint8
 
-            # Convert grayscale to RGB for imagecorruptions
+            # imagecorruptions requires images >= 32x32.
+            # Upsample 28x28 -> 32x32, corrupt, then downsample back to 28x28.
             img_rgb = np.stack([img_gray, img_gray, img_gray], axis=-1)  # (28, 28, 3)
+            img_rgb_32 = cv2.resize(img_rgb, (32, 32), interpolation=cv2.INTER_NEAREST)
 
-            corrupted_rgb = corrupt(
-                img_rgb,
+            corrupted_rgb_32 = corrupt(
+                img_rgb_32,
                 severity=self.severity,
                 corruption_name=self.corruption_name
-            )  # (28, 28, 3) uint8
+            )  # (32, 32, 3) uint8
 
-            # Convert back to grayscale by averaging channels
-            corrupted_gray = corrupted_rgb.mean(axis=-1).astype(np.uint8)  # (28, 28)
+            # Downsample back to 28x28 and convert to grayscale
+            corrupted_rgb_28 = cv2.resize(corrupted_rgb_32, (28, 28), interpolation=cv2.INTER_AREA)
+            corrupted_gray = corrupted_rgb_28.mean(axis=-1).astype(np.uint8)  # (28, 28)
 
             self.train_set.data[idx] = torch.from_numpy(corrupted_gray)
             count += 1
