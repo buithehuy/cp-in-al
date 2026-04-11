@@ -42,6 +42,52 @@ from utils import (
 )
 
 
+class NoisyOracleWrapper(torch.utils.data.Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self.overrides = {}
+        
+    def __len__(self):
+        return len(self.dataset)
+        
+    def __getitem__(self, idx):
+        item = self.dataset[idx]
+        if idx in self.overrides:
+            data = item[0]
+            target = self.overrides[idx]
+            if len(item) > 2:
+                return (data, target) + item[2:]
+            return data, target
+        return item
+
+
+def is_in_cp_set(prob, noisy_y, qhat, strategy_name, **kwargs):
+    """Check if the given label (noisy_y) is inside the Conformal Prediction set."""
+    if strategy_name in ('cp_aps', 'cp_boundary_uncertainty', 'cp_diversity', 'cp_aps_spm', 'cp_wise'):
+        sorted_probs, sorted_indices = torch.sort(prob, descending=True)
+        cumsum = torch.cumsum(sorted_probs, dim=0)
+        rank = (sorted_indices == noisy_y).nonzero(as_tuple=True)[0].item()
+        if rank == 0:
+            return True
+        return cumsum[rank-1] < qhat
+    elif strategy_name == 'cp_rmcp':
+        other_probs = torch.cat([prob[:noisy_y], prob[noisy_y+1:]])
+        score = prob[noisy_y] - other_probs.mean()
+        return score >= qhat
+    elif strategy_name in ('cp_rel_margin', 'cp_rcs_mi', 'cp_rcs_v2'):
+        p_max = prob.max()
+        return prob[noisy_y] >= p_max * (1 - qhat)
+    elif strategy_name == 'cp_classwise':
+        return prob[noisy_y] >= (1 - qhat[noisy_y])
+    elif strategy_name == 'cp_feature_size':
+        feat = kwargs.get('feature')
+        weights = kwargs.get('weights')
+        dist = torch.norm(feat - weights[noisy_y], p=2).item()
+        return dist <= qhat
+    else:  # Standard CP (cp_size, combined, etc.)
+        return prob[noisy_y] >= (1 - qhat)
+
+
 def set_seed(seed):
     """Set random seed for reproducibility."""
     random.seed(seed)
@@ -156,6 +202,9 @@ def main(cfg: DictConfig):
     print(f"\nStarting active learning loop ({cfg.num_rounds} rounds)...")
     print("=" * 80)
     
+    # Wrap train_set to support Noisy Oracle overrides (Simulate human annotation errors)
+    data_module.train_set = NoisyOracleWrapper(data_module.train_set)
+    
     pending_log = None  # Log từ lần select trước, sẽ in sau round hiện tại
     
     for round_idx in range(cfg.num_rounds + 1):
@@ -240,7 +289,7 @@ def main(cfg: DictConfig):
             pool_loader = data_module.get_loader(pool_idx, shuffle=False)
             
             if cfg.strategy.name == 'cp_feature_size':
-                pool_features, pool_probs, _ = get_features_and_probs(model, pool_loader, device)
+                pool_features, pool_probs, pool_labels = get_features_and_probs(model, pool_loader, device)
                 if hasattr(model, 'model') and hasattr(model.model, 'fc'):
                     weights = model.model.fc.weight.data.cpu()
                 else:
@@ -254,22 +303,63 @@ def main(cfg: DictConfig):
                     weights=weights
                 )
             else:
-                pool_probs, _ = get_probs(model, pool_loader, device)
+                pool_probs, pool_labels = get_probs(model, pool_loader, device)
                 selected_idx = strategy.select(
                     probs=pool_probs,
                     budget=cfg.data.budget_per_round,
                     qhat=qhat
                 )
             
-            # Update labeled and pool sets
-            selected_global = [pool_idx[i] for i in selected_idx.tolist()]
+            # --- Noisy Oracle Query & CP Correction ---
+            noise_rate = cfg.get("noise_rate", 0.0)
+            cp_correction = cfg.get("cp_correction", False)
             
-            # Build pending log for clean vs corrupt breakdown (printed after next round header)
+            selected_global = []
+            
+            # Count errors and corrections for pending_log
+            n_mislabelings = 0
+            n_corrections = 0
+            
+            for k, list_idx_tensor in enumerate(selected_idx.tolist()):
+                list_idx = int(list_idx_tensor)
+                global_idx = pool_idx[list_idx]
+                selected_global.append(global_idx)
+                
+                true_y = pool_labels[list_idx].item()
+                final_y = true_y
+                
+                # Human makes an error with probability noise_rate
+                if noise_rate > 0.0 and random.random() < noise_rate:
+                    noisy_y = random.choice([c for c in range(num_classes) if c != true_y])
+                    final_y = noisy_y
+                    n_mislabelings += 1
+                    
+                    # Conformal Correction mechanism
+                    if cp_correction and cfg.strategy.name.startswith("cp_"):
+                        kwargs_cp = {}
+                        if cfg.strategy.name == 'cp_feature_size':
+                            kwargs_cp['feature'] = pool_features[list_idx]
+                            kwargs_cp['weights'] = weights
+                            
+                        is_in_set = is_in_cp_set(pool_probs[list_idx], noisy_y, qhat, cfg.strategy.name, **kwargs_cp)
+                        
+                        # If human's label is NOT in the set, system forces a review and gets true label
+                        if not is_in_set:
+                            final_y = true_y
+                            n_corrections += 1
+                
+                if final_y != true_y:
+                    data_module.train_set.overrides[global_idx] = final_y
+                    
+            # Build pending log
+            pending_log = f"  → Selected: {len(selected_global)} | Queries missed: {n_mislabelings}"
+            if cp_correction and cfg.strategy.name.startswith("cp_"):
+                pending_log += f" | Recovered by CP: {n_corrections}"
+            
+            # Append original corruption logic info to pending log if exists
             if hasattr(data_module, 'corrupted_indices') and data_module.corrupted_indices:
                 n_corrupt = sum(1 for i in selected_global if i in data_module.corrupted_indices)
-                n_clean = len(selected_global) - n_corrupt
-                pending_log = (f"  → Selected: {n_clean} clean + {n_corrupt} corrupted "
-                               f"({100*n_corrupt/len(selected_global):.1f}% corrupted)")
+                pending_log += f" | Pre-corrupted data: {n_corrupt}"
             
             labeled_idx.extend(selected_global)
             pool_idx = [i for i in pool_idx if i not in set(selected_global)]
