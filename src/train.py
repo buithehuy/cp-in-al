@@ -319,6 +319,7 @@ def main(cfg: DictConfig):
             # Count errors and corrections for pending_log
             n_mislabelings = 0
             n_corrections = 0
+            n_false_alarms = 0
             
             for k, list_idx_tensor in enumerate(selected_idx.tolist()):
                 list_idx = int(list_idx_tensor)
@@ -326,27 +327,34 @@ def main(cfg: DictConfig):
                 selected_global.append(global_idx)
                 
                 true_y = pool_labels[list_idx].item()
-                final_y = true_y
+                is_mislabeling = False
                 
                 # Human makes an error with probability noise_rate
                 if noise_rate > 0.0 and random.random() < noise_rate:
                     noisy_y = random.choice([c for c in range(num_classes) if c != true_y])
-                    final_y = noisy_y
+                    is_mislabeling = True
                     n_mislabelings += 1
+                else:
+                    noisy_y = true_y
                     
-                    # Conformal Correction mechanism
-                    if cp_correction and cfg.strategy.name.startswith("cp_"):
-                        kwargs_cp = {}
-                        if cfg.strategy.name == 'cp_feature_size':
-                            kwargs_cp['feature'] = pool_features[list_idx]
-                            kwargs_cp['weights'] = weights
-                            
-                        is_in_set = is_in_cp_set(pool_probs[list_idx], noisy_y, qhat, cfg.strategy.name, **kwargs_cp)
+                final_y = noisy_y
+                
+                # Conformal Correction mechanism
+                if cp_correction and cfg.strategy.name.startswith("cp_"):
+                    kwargs_cp = {}
+                    if cfg.strategy.name == 'cp_feature_size':
+                        kwargs_cp['feature'] = pool_features[list_idx]
+                        kwargs_cp['weights'] = weights
                         
-                        # If human's label is NOT in the set, system forces a review and gets true label
-                        if not is_in_set:
-                            final_y = true_y
-                            n_corrections += 1
+                    is_in_set = is_in_cp_set(pool_probs[list_idx], noisy_y, qhat, cfg.strategy.name, **kwargs_cp)
+                    
+                    # If human's label is NOT in the set, system forces a review
+                    if not is_in_set:
+                        final_y = true_y  # Human reviews and always provides the true label
+                        if is_mislabeling:
+                            n_corrections += 1  # Successfully recovered a mistake
+                        else:
+                            n_false_alarms += 1 # Human was already right, system alarmed unnecessarily
                 
                 if final_y != true_y:
                     data_module.train_set.overrides[global_idx] = final_y
@@ -354,7 +362,10 @@ def main(cfg: DictConfig):
             # Build pending log
             pending_log = f"  → Selected: {len(selected_global)} | Queries missed: {n_mislabelings}"
             if cp_correction and cfg.strategy.name.startswith("cp_"):
-                pending_log += f" | Recovered by CP: {n_corrections}"
+                budget = len(selected_global)
+                n_reviews = n_corrections + n_false_alarms
+                review_rate = (n_reviews / budget * 100) if budget > 0 else 0
+                pending_log += f" | Reviews: {n_reviews} (Rate: {review_rate:.1f}%) | Recovered: {n_corrections} | False Alarms: {n_false_alarms}"
             
             # Append original corruption logic info to pending log if exists
             if hasattr(data_module, 'corrupted_indices') and data_module.corrupted_indices:
