@@ -163,11 +163,11 @@ def compute_qhat_aps(model, loader, alpha=0.1, device='cuda'):
         # Conformity score is cumulative prob up to and including true class
         scores[i] = sorted_probs[i, :rank+1].sum().item()
     
-    # CRITICAL: For APS, higher score = easier to cover (true class appears early)
-    # So we need the ALPHA quantile (not 1-alpha) to get the threshold that
-    # ensures (1-alpha) coverage
+    # For APS, score = sum of probs up to true class.
+    # Higher score means the true class appears LATE, which is HARDER to cover.
+    # So we need the (1-alpha) quantile to get the threshold that ensures (1-alpha) coverage.
     n = len(labels)
-    k = int(np.ceil((n + 1) * alpha))  # Changed from (1-alpha) to alpha
+    k = int(np.ceil((n + 1) * (1 - alpha)))
     k = min(max(k - 1, 0), n - 1)  # Ensure valid index
     
     qhat = torch.sort(scores)[0][k].item()
@@ -258,10 +258,10 @@ def compute_qhat_rmcp(model, loader, alpha=0.1, device='cuda'):
     # CRITICAL: RMCP score interpretation
     # High score (e.g., +0.7) = p_true >> mean(others) = CONFIDENT = easy to cover
     # Low score (e.g., -0.2) = p_true << mean(others) = UNCERTAIN = hard to cover
-    # This is similar to APS (reversed from standard CP)!
-    # So we need ALPHA quantile (not 1-alpha) to get proper coverage
+    # This means RMCP score is a conformity score (reversed from standard CP)!
+    # So we need the ALPHA quantile (not 1-alpha) to get proper coverage.
     n = len(scores)
-    k = int(np.ceil((n + 1) * alpha))  # Changed from (1-alpha) to alpha
+    k = int(np.ceil((n + 1) * alpha))
     k = min(max(k - 1, 0), n - 1)
     
     qhat = torch.sort(scores)[0][k].item()
