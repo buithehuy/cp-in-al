@@ -366,7 +366,7 @@ def main(cfg: DictConfig):
                 n_reviews = n_corrections + n_false_alarms
                 rate_correction = (n_corrections / n_mislabelings * 100) if n_mislabelings > 0 else 0
                 rate_false_alarm = (n_false_alarms / n_mislabelings * 100) if n_mislabelings > 0 else 0
-                review_rate = (n_reviews / budget * 100) if budget > 0 else 0
+                review_rate = (n_reviews / n_mislabelings * 100) if n_mislabelings > 0 else 0
                 pending_log += f" | Reviews: {n_reviews} ({review_rate:.1f}%) | Recovered: {n_corrections} ({rate_correction:.1f}%) | False Alarms: {n_false_alarms} ({rate_false_alarm:.1f}%)"
             
             # Append original corruption logic info to pending log if exists
