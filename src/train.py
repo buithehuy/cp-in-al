@@ -339,14 +339,19 @@ def main(cfg: DictConfig):
                     
                 final_y = noisy_y
                 
-                # Conformal Correction mechanism
-                if cp_correction and cfg.strategy.name.startswith("cp_"):
-                    kwargs_cp = {}
-                    if cfg.strategy.name == 'cp_feature_size':
-                        kwargs_cp['feature'] = pool_features[list_idx]
-                        kwargs_cp['weights'] = weights
-                        
-                    is_in_set = is_in_cp_set(pool_probs[list_idx], noisy_y, qhat, cfg.strategy.name, **kwargs_cp)
+                # Conformal or Top-N Correction mechanism
+                if cp_correction:
+                    if cfg.strategy.name.startswith("cp_"):
+                        kwargs_cp = {}
+                        if cfg.strategy.name == 'cp_feature_size':
+                            kwargs_cp['feature'] = pool_features[list_idx]
+                            kwargs_cp['weights'] = weights
+                            
+                        is_in_set = is_in_cp_set(pool_probs[list_idx], noisy_y, qhat, cfg.strategy.name, **kwargs_cp)
+                    else:
+                        top_n = cfg.get("top_n", 1)  # N is configurable
+                        top_n_indices = torch.topk(pool_probs[list_idx], min(top_n, num_classes)).indices
+                        is_in_set = noisy_y in top_n_indices.tolist()
                     
                     # If human's label is NOT in the set, system forces a review
                     if not is_in_set:
@@ -361,7 +366,7 @@ def main(cfg: DictConfig):
                     
             # Build pending log
             pending_log = f"  → Selected: {len(selected_global)} | Queries missed: {n_mislabelings}"
-            if cp_correction and cfg.strategy.name.startswith("cp_"):
+            if cp_correction:
                 budget = len(selected_global)
                 n_reviews = n_corrections + n_false_alarms
                 rate_correction = (n_corrections / n_mislabelings * 100) if n_mislabelings > 0 else 0
