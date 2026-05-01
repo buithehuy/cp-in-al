@@ -11,6 +11,7 @@ from utils.visualization import (
     plot_accuracy_vs_samples,
     plot_cp_coverage,
     plot_cp_set_size,
+    plot_set_size_distribution,
     plot_all_metrics,
     print_summary_table,
     export_accuracy_table
@@ -48,7 +49,7 @@ Examples:
     )
     parser.add_argument(
         '--plot',
-        choices=['all', 'accuracy', 'coverage', 'set_size'],
+        choices=['all', 'accuracy', 'coverage', 'set_size', 'set_size_dist'],
         default='all',
         help='Which plots to generate (default: all)'
     )
@@ -81,6 +82,14 @@ Examples:
         '--colors',
         nargs='+',
         help='List of colors to use for strategies (e.g., --colors red blue green)'
+    )
+    parser.add_argument(
+        '--dist-round',
+        type=int,
+        default=-1,
+        metavar='ROUND',
+        help='Round index to use for set size distribution plot '
+             '(default: -1 = last round, 0 = first round)'
     )
     
     args = parser.parse_args()
@@ -120,6 +129,10 @@ Examples:
         print("\nGenerating comprehensive plots...")
         ylim = tuple(args.ylim) if args.ylim else None
         plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset, ylim=ylim, colors=args.colors)
+        # Also plot set size distribution for the last round
+        print("\nGenerating set size distribution plot (last round)...")
+        save_path = os.path.join(args.save_dir, 'set_size_dist.png') if args.save_dir else None
+        plot_set_size_distribution(results_dict, round_idx=-1, save_path=save_path, colors=args.colors)
         
     elif args.plot == 'accuracy':
         print("\nGenerating accuracy plot...")
@@ -136,6 +149,12 @@ Examples:
         print("\nGenerating set size plot...")
         save_path = os.path.join(args.save_dir, 'set_size.png') if args.save_dir else None
         plot_cp_set_size(results_dict, save_path=save_path, colors=args.colors)
+
+    elif args.plot == 'set_size_dist':
+        round_idx = args.dist_round
+        print(f"\nGenerating set size distribution plot (round {round_idx})...")
+        save_path = os.path.join(args.save_dir, 'set_size_dist.png') if args.save_dir else None
+        plot_set_size_distribution(results_dict, round_idx=round_idx, save_path=save_path, colors=args.colors)
 
 
 if __name__ == '__main__':

@@ -193,7 +193,8 @@ def main(cfg: DictConfig):
         'accuracies': [],
         'cp_coverage': [],
         'cp_avg_set_size': [],
-        'cp_zero_sets': []
+        'cp_zero_sets': [],
+        'cp_set_size_dists': []  # list of {set_size: count} per round
     }
     
     samples_trained = 0
@@ -238,6 +239,7 @@ def main(cfg: DictConfig):
         results['cp_coverage'].append(cp_metrics['coverage'])
         results['cp_avg_set_size'].append(cp_metrics['avg_set_size'])
         results['cp_zero_sets'].append(cp_metrics['zero_sets'])
+        results['cp_set_size_dists'].append(cp_metrics.get('set_size_dist', {}))
         
         # Print status (no AvgSet/Zero to keep log clean)
         pct = 100 * samples_trained / total_available if samples_trained > 0 else 0

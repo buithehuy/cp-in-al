@@ -297,6 +297,114 @@ def plot_cp_set_size(results_dict, save_path=None, figsize=(14, 6), colors=None)
     plt.show()
 
 
+def plot_set_size_distribution(results_dict, round_idx=-1, save_path=None,
+                               figsize=(14, 6), colors=None):
+    """Plot Set Size Distribution as a grouped bar chart.
+
+    X-axis: prediction set size (0, 1, 2, 3, ...)
+    Y-axis: number of test samples with that set size
+    Each strategy is shown as a separate bar group.
+
+    Args:
+        results_dict: Dictionary mapping strategy names to results.
+                      Each results must have a 'cp_set_size_dists' key —
+                      a list of {size: count} dicts, one per round.
+        round_idx: Which round to visualize. Use -1 for the last round
+                   (default), or any integer index.
+        save_path: Optional path to save the figure.
+        figsize: Figure size (width, height).
+        colors: Optional list of colors to use for strategies (assigned
+                alphabetically).
+    """
+    # Filter only strategies that have distribution data
+    valid = {name: res for name, res in results_dict.items()
+             if res.get('cp_set_size_dists')}
+
+    if not valid:
+        print("No set_size_dist data found. "
+              "Re-run training to generate distribution data.")
+        return
+
+    # Resolve round index and collect distributions
+    strategy_dists = {}
+    resolved_round = None
+    for name, res in valid.items():
+        dists = res['cp_set_size_dists']
+        try:
+            dist = dists[round_idx]
+        except IndexError:
+            dist = dists[-1]
+        strategy_dists[name] = dist
+        if resolved_round is None:
+            actual_idx = round_idx if round_idx >= 0 else len(dists) + round_idx
+            n_labeled = res['labeled_sizes'][actual_idx] if actual_idx < len(res['labeled_sizes']) else '?'
+            resolved_round = (actual_idx, n_labeled)
+
+    # Determine global set-size range
+    all_sizes = set()
+    for dist in strategy_dists.values():
+        all_sizes.update(dist.keys())
+    if not all_sizes:
+        print("Distribution data is empty.")
+        return
+    size_range = list(range(min(all_sizes), max(all_sizes) + 1))
+
+    # Build bar data
+    strategy_names = sorted(strategy_dists.keys())
+    n_strategies = len(strategy_names)
+    n_bins = len(size_range)
+    bar_width = 0.8 / max(n_strategies, 1)
+
+    strategy_colors = _get_color_map(results_dict.keys(), colors)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    x = np.arange(n_bins)
+    for i, name in enumerate(strategy_names):
+        dist = strategy_dists[name]
+        counts = [dist.get(s, 0) for s in size_range]
+        offset = (i - n_strategies / 2 + 0.5) * bar_width
+        bars = ax.bar(
+            x + offset, counts,
+            width=bar_width,
+            label=LABELS.get(name, name),
+            color=strategy_colors.get(name, None),
+            alpha=0.85,
+            edgecolor='white',
+            linewidth=0.6
+        )
+        # Annotate bar tops (skip zeros)
+        for bar, count in zip(bars, counts):
+            if count > 0:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height(),
+                    str(count),
+                    ha='center', va='bottom',
+                    fontsize=7, color='black'
+                )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(size_range, fontsize=11)
+    ax.set_xlabel('Set Size', fontsize=13)
+    ax.set_ylabel('Number of Samples', fontsize=13)
+
+    round_label = f"Round {resolved_round[0]} ({resolved_round[1]} labeled samples)" \
+        if resolved_round else ""
+    ax.set_title(f'Set Size Distribution — {round_label}',
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=10, ncol=2)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_axisbelow(True)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved set size distribution plot to: {save_path}")
+
+    plt.show()
+
+
 def plot_all_metrics(results_dict, output_dir=None, show=True, dataset=None, ylim=None, colors=None):
     """Plot main Active Learning metrics (Accuracy, Gap, AULC).
     

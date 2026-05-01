@@ -107,7 +107,7 @@ def evaluate_conformal_prediction(model, loader, qhat, device='cuda'):
         device: Device to use
         
     Returns:
-        Dictionary with CP metrics (coverage, avg_set_size, zero_sets)
+        Dictionary with CP metrics (coverage, avg_set_size, zero_sets, set_size_dist)
     """
     probs, labels = get_probs(model, loader, device)
     
@@ -117,16 +117,26 @@ def evaluate_conformal_prediction(model, loader, qhat, device='cuda'):
     # Coverage: fraction of test samples where true label is in prediction set
     coverage = pred_sets[torch.arange(len(labels)), labels].float().mean().item()
     
+    # Set sizes per sample
+    set_sizes = pred_sets.sum(dim=1).tolist()
+    
     # Average set size
-    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
+    avg_set_size = float(np.mean(set_sizes))
     
     # Number of empty sets (overconfident errors)
-    zero_sets = (pred_sets.sum(dim=1) == 0).sum().item()
+    zero_sets = sum(1 for s in set_sizes if s == 0)
+    
+    # Set size distribution: {size: count}
+    set_size_dist = {}
+    for s in set_sizes:
+        s = int(s)
+        set_size_dist[s] = set_size_dist.get(s, 0) + 1
     
     return {
         'coverage': coverage,
         'avg_set_size': avg_set_size,
-        'zero_sets': zero_sets
+        'zero_sets': zero_sets,
+        'set_size_dist': set_size_dist
     }
 
 
@@ -184,7 +194,7 @@ def evaluate_aps(model, loader, qhat, device='cuda'):
         device: Device to use
         
     Returns:
-        Dictionary with APS metrics (coverage, avg_set_size, zero_sets)
+        Dictionary with APS metrics (coverage, avg_set_size, zero_sets, set_size_dist)
     """
     probs, labels = get_probs(model, loader, device)
     
@@ -216,13 +226,21 @@ def evaluate_aps(model, loader, qhat, device='cuda'):
             coverage_count += 1
     
     coverage = coverage_count / n_samples
-    avg_set_size = pred_set_sizes.mean().item()
-    zero_sets = (pred_set_sizes == 0).sum().item()
+    set_sizes_list = pred_set_sizes.int().tolist()
+    avg_set_size = float(np.mean(set_sizes_list))
+    zero_sets = sum(1 for s in set_sizes_list if s == 0)
+    
+    # Set size distribution: {size: count}
+    set_size_dist = {}
+    for s in set_sizes_list:
+        s = int(s)
+        set_size_dist[s] = set_size_dist.get(s, 0) + 1
     
     return {
         'coverage': coverage,
         'avg_set_size': avg_set_size,
-        'zero_sets': zero_sets
+        'zero_sets': zero_sets,
+        'set_size_dist': set_size_dist
     }
 
 
@@ -278,7 +296,7 @@ def evaluate_rmcp(model, loader, qhat, device='cuda'):
         device: Device to use
         
     Returns:
-        Dictionary with RMCP metrics (coverage, avg_set_size, zero_sets)
+        Dictionary with RMCP metrics (coverage, avg_set_size, zero_sets, set_size_dist)
     """
     probs, labels = get_probs(model, loader, device)
     n_samples, n_classes = probs.shape
@@ -309,12 +327,19 @@ def evaluate_rmcp(model, loader, qhat, device='cuda'):
             coverage_count += 1
     
     coverage = coverage_count / n_samples
-    avg_set_size = np.mean(set_sizes)
+    avg_set_size = float(np.mean(set_sizes))
+    
+    # Set size distribution: {size: count}
+    set_size_dist = {}
+    for s in set_sizes:
+        s = int(s)
+        set_size_dist[s] = set_size_dist.get(s, 0) + 1
     
     return {
         'coverage': coverage,
         'avg_set_size': avg_set_size,
-        'zero_sets': zero_count
+        'zero_sets': zero_count,
+        'set_size_dist': set_size_dist
     }
 
 
@@ -371,7 +396,7 @@ def evaluate_rcs(model, loader, qhat, device='cuda'):
         device: Device
 
     Returns:
-        dict with coverage, avg_set_size, zero_sets
+        dict with coverage, avg_set_size, zero_sets, set_size_dist
     """
     probs, labels = get_probs(model, loader, device)
     p_max = probs.max(dim=1, keepdim=True)[0]                 # (n, 1)
@@ -380,10 +405,16 @@ def evaluate_rcs(model, loader, qhat, device='cuda'):
     pred_sets = (probs >= threshold)                           # (n, C)
 
     coverage     = pred_sets[torch.arange(len(labels)), labels].float().mean().item()
-    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
-    zero_sets    = (pred_sets.sum(dim=1) == 0).sum().item()
+    set_sizes    = pred_sets.sum(dim=1).int().tolist()
+    avg_set_size = float(np.mean(set_sizes))
+    zero_sets    = sum(1 for s in set_sizes if s == 0)
 
-    return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets}
+    set_size_dist = {}
+    for s in set_sizes:
+        s = int(s)
+        set_size_dist[s] = set_size_dist.get(s, 0) + 1
+
+    return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets, 'set_size_dist': set_size_dist}
 
 
 def compute_qhat_classwise(model, loader, alpha=0.1, device='cuda'):
@@ -442,7 +473,7 @@ def evaluate_classwise(model, loader, qhat_per_class, device='cuda'):
         device:          Device
 
     Returns:
-        dict with coverage, avg_set_size, zero_sets
+        dict with coverage, avg_set_size, zero_sets, set_size_dist
     """
     probs, labels = get_probs(model, loader, device)
 
@@ -453,10 +484,16 @@ def evaluate_classwise(model, loader, qhat_per_class, device='cuda'):
     pred_sets = probs >= thresholds.unsqueeze(0)           # (n, C)
 
     coverage     = pred_sets[torch.arange(len(labels)), labels].float().mean().item()
-    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
-    zero_sets    = (pred_sets.sum(dim=1) == 0).sum().item()
+    set_sizes    = pred_sets.sum(dim=1).int().tolist()
+    avg_set_size = float(np.mean(set_sizes))
+    zero_sets    = sum(1 for s in set_sizes if s == 0)
 
-    return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets}
+    set_size_dist = {}
+    for s in set_sizes:
+        s = int(s)
+        set_size_dist[s] = set_size_dist.get(s, 0) + 1
+
+    return {'coverage': coverage, 'avg_set_size': avg_set_size, 'zero_sets': zero_sets, 'set_size_dist': set_size_dist}
 
 
 def compute_qhat_feature_cp(model, loader, alpha=0.1, device='cuda'):
@@ -503,7 +540,7 @@ def evaluate_feature_cp(model, loader, qhat, device='cuda'):
         device: Device to use
         
     Returns:
-        Dictionary with CP metrics (coverage, avg_set_size, zero_sets)
+        Dictionary with CP metrics (coverage, avg_set_size, zero_sets, set_size_dist)
     """
     features, probs, labels = get_features_and_probs(model, loader, device)
     if hasattr(model, 'model') and hasattr(model.model, 'fc'):
@@ -520,11 +557,18 @@ def evaluate_feature_cp(model, loader, qhat, device='cuda'):
     pred_sets = distances <= qhat
     
     coverage = pred_sets[torch.arange(n_samples), labels].float().mean().item()
-    avg_set_size = pred_sets.sum(dim=1).float().mean().item()
-    zero_sets = (pred_sets.sum(dim=1) == 0).sum().item()
+    set_sizes = pred_sets.sum(dim=1).int().tolist()
+    avg_set_size = float(np.mean(set_sizes))
+    zero_sets = sum(1 for s in set_sizes if s == 0)
+
+    set_size_dist = {}
+    for s in set_sizes:
+        s = int(s)
+        set_size_dist[s] = set_size_dist.get(s, 0) + 1
     
     return {
         'coverage': coverage,
         'avg_set_size': avg_set_size,
-        'zero_sets': zero_sets
+        'zero_sets': zero_sets,
+        'set_size_dist': set_size_dist
     }
