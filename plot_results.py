@@ -129,10 +129,6 @@ Examples:
         print("\nGenerating comprehensive plots...")
         ylim = tuple(args.ylim) if args.ylim else None
         plot_all_metrics(results_dict, output_dir=args.save_dir, show=show, dataset=dataset, ylim=ylim, colors=args.colors)
-        # Also plot set size distribution for the last round
-        print("\nGenerating set size distribution plot (last round)...")
-        save_path = os.path.join(args.save_dir, 'set_size_dist.png') if args.save_dir else None
-        plot_set_size_distribution(results_dict, round_idx=-1, save_path=save_path, colors=args.colors)
         
     elif args.plot == 'accuracy':
         print("\nGenerating accuracy plot...")
