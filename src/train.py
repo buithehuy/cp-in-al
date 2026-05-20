@@ -12,6 +12,7 @@ from data import CIFAR100DataModule
 from data import CIFAR100NDataModule
 from data import CIFAR100CDataModule
 from data import CIFAR10CDataModule
+from data import CIFAR10OODDataModule
 from data import STL10DataModule
 from data import SVHNDataModule
 from data import CUB200DataModule
@@ -130,6 +131,8 @@ def main(cfg: DictConfig):
         data_module = CIFAR100CDataModule(cfg.data)
     elif cfg.data.name == "CIFAR10C":
         data_module = CIFAR10CDataModule(cfg.data)
+    elif cfg.data.name == "CIFAR10OOD":
+        data_module = CIFAR10OODDataModule(cfg.data)
     elif cfg.data.name == "STL10":
         data_module = STL10DataModule(cfg.data)
     elif cfg.data.name == "SVHN":
@@ -317,25 +320,36 @@ def main(cfg: DictConfig):
             cp_correction = cfg.get("cp_correction", False)
             
             selected_global = []
+            ood_rejected_global = []  # OOD samples caught & discarded by CP
             
             # Count errors and corrections for pending_log
             n_mislabelings = 0
             n_corrections = 0
             n_false_alarms = 0
+            n_ood_selected = 0
+            n_ood_rejected = 0
+            
+            has_ood = hasattr(data_module, 'ood_indices') and len(data_module.ood_indices) > 0
             
             for k, list_idx_tensor in enumerate(selected_idx.tolist()):
                 list_idx = int(list_idx_tensor)
                 global_idx = pool_idx[list_idx]
-                selected_global.append(global_idx)
+                
+                is_ood = has_ood and global_idx in data_module.ood_indices
+                if is_ood:
+                    n_ood_selected += 1
                 
                 true_y = pool_labels[list_idx].item()
                 is_mislabeling = False
                 
                 # Human makes an error with probability noise_rate
+                # Note: For OOD images the stored label is already random/wrong,
+                #       but the noisy oracle mechanism still applies uniformly.
                 if noise_rate > 0.0 and random.random() < noise_rate:
                     noisy_y = random.choice([c for c in range(num_classes) if c != true_y])
                     is_mislabeling = True
-                    n_mislabelings += 1
+                    if not is_ood:
+                        n_mislabelings += 1
                 else:
                     noisy_y = true_y
                     
@@ -357,11 +371,19 @@ def main(cfg: DictConfig):
                     
                     # If human's label is NOT in the set, system forces a review
                     if not is_in_set:
-                        final_y = true_y  # Human reviews and always provides the true label
-                        if is_mislabeling:
-                            n_corrections += 1  # Successfully recovered a mistake
+                        if is_ood:
+                            # Human reviews → recognizes OOD image → discards it
+                            n_ood_rejected += 1
+                            ood_rejected_global.append(global_idx)
+                            continue  # Do NOT add to labeled set
                         else:
-                            n_false_alarms += 1 # Human was already right, system alarmed unnecessarily
+                            final_y = true_y  # Human reviews and provides the true label
+                            if is_mislabeling:
+                                n_corrections += 1  # Successfully recovered a mistake
+                            else:
+                                n_false_alarms += 1 # Human was already right, system alarmed unnecessarily
+                
+                selected_global.append(global_idx)
                 
                 if final_y != true_y:
                     data_module.train_set.overrides[global_idx] = final_y
@@ -381,8 +403,16 @@ def main(cfg: DictConfig):
                 n_corrupt = sum(1 for i in selected_global if i in data_module.corrupted_indices)
                 pending_log += f" | Pre-corrupted data: {n_corrupt}"
             
+            # Append OOD stats to pending log
+            if has_ood and n_ood_selected > 0:
+                n_ood_kept = n_ood_selected - n_ood_rejected
+                pending_log += (f" | OOD selected: {n_ood_selected}"
+                                f" (kept: {n_ood_kept}, rejected: {n_ood_rejected})")
+            
             labeled_idx.extend(selected_global)
-            pool_idx = [i for i in pool_idx if i not in set(selected_global)]
+            # Remove both accepted and OOD-rejected samples from pool
+            all_removed = set(selected_global + ood_rejected_global)
+            pool_idx = [i for i in pool_idx if i not in all_removed]
     
     print("=" * 80)
     print("Training complete!")
